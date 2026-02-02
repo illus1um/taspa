@@ -1,0 +1,213 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: taspa-postgres
+    environment:
+      POSTGRES_USER: taspa
+      POSTGRES_PASSWORD: taspa
+      POSTGRES_DB: taspa
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: taspa-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: taspa
+      RABBITMQ_DEFAULT_PASS: taspa
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+
+  minio:
+    image: minio/minio:latest
+    container_name: taspa-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: minio
+      MINIO_ROOT_PASSWORD: minio123
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  api-gateway:
+    profiles: ["app"]
+    build: ./services/api-gateway
+    container_name: taspa-api-gateway
+    environment:
+      SERVICE_NAME: api-gateway
+      JWT_SECRET: dev-secret
+      JWT_ALGORITHM: HS256
+      AUTH_SERVICE_URL: http://auth-service:8001
+      DIRECTION_SERVICE_URL: http://direction-service:8002
+      ANALYTICS_SERVICE_URL: http://analytics-service:8003
+      EXPORT_SERVICE_URL: http://export-service:8004
+      SCRAPING_SERVICE_URL: http://scraping-orchestrator:8005
+      REALTIME_LOG_SERVICE_URL: http://realtime-log-service:8010
+    depends_on:
+      - auth-service
+      - direction-service
+      - analytics-service
+      - export-service
+      - realtime-log-service
+    ports:
+      - "8000:8000"
+
+  auth-service:
+    profiles: ["app"]
+    build: ./services/auth-service
+    container_name: taspa-auth-service
+    environment:
+      SERVICE_NAME: auth-service
+      DATABASE_URL: postgresql://taspa:taspa@postgres:5432/taspa
+      JWT_SECRET: dev-secret
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRE_MINUTES: "60"
+    depends_on:
+      - postgres
+    ports:
+      - "8001:8001"
+
+  direction-service:
+    profiles: ["app"]
+    build: ./services/direction-service
+    container_name: taspa-direction-service
+    environment:
+      SERVICE_NAME: direction-service
+      DATABASE_URL: postgresql://taspa:taspa@postgres:5432/taspa
+    depends_on:
+      - postgres
+    ports:
+      - "8002:8002"
+
+  analytics-service:
+    profiles: ["app"]
+    build: ./services/analytics-service
+    container_name: taspa-analytics-service
+    environment:
+      SERVICE_NAME: analytics-service
+      DATABASE_URL: postgresql://taspa:taspa@postgres:5432/taspa
+    depends_on:
+      - postgres
+    ports:
+      - "8003:8003"
+
+  export-service:
+    profiles: ["app"]
+    build: ./services/export-service
+    container_name: taspa-export-service
+    environment:
+      SERVICE_NAME: export-service
+      DATABASE_URL: postgresql://taspa:taspa@postgres:5432/taspa
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: minio
+      MINIO_SECRET_KEY: minio123
+    depends_on:
+      - postgres
+      - minio
+    ports:
+      - "8004:8004"
+
+  scraping-orchestrator:
+    profiles: ["app"]
+    build: ./services/scraping-orchestrator
+    container_name: taspa-scraping-orchestrator
+    environment:
+      SERVICE_NAME: scraping-orchestrator
+      DATABASE_URL: postgresql://taspa:taspa@postgres:5432/taspa
+      RABBITMQ_URL: amqp://taspa:taspa@rabbitmq:5672
+    depends_on:
+      - postgres
+      - rabbitmq
+    ports:
+      - "8005:8005"
+
+  vk-scraper:
+    profiles: ["app"]
+    build: ./services/vk-scraper
+    container_name: taspa-vk-scraper
+    environment:
+      SERVICE_NAME: vk-scraper
+      DATABASE_URL: postgresql://taspa:taspa@postgres:5432/taspa
+      RABBITMQ_URL: amqp://taspa:taspa@rabbitmq:5672
+      REALTIME_LOG_URL: http://realtime-log-service:8010
+      ORCHESTRATOR_URL: http://scraping-orchestrator:8005
+    depends_on:
+      - postgres
+      - rabbitmq
+    ports:
+      - "8006:8006"
+
+  instagram-scraper:
+    profiles: ["app"]
+    build: ./services/instagram-scraper
+    container_name: taspa-instagram-scraper
+    environment:
+      SERVICE_NAME: instagram-scraper
+      DATABASE_URL: postgresql://taspa:taspa@postgres:5432/taspa
+      RABBITMQ_URL: amqp://taspa:taspa@rabbitmq:5672
+      REALTIME_LOG_URL: http://realtime-log-service:8010
+      ORCHESTRATOR_URL: http://scraping-orchestrator:8005
+    depends_on:
+      - postgres
+      - rabbitmq
+    ports:
+      - "8007:8007"
+
+  tiktok-scraper:
+    profiles: ["app"]
+    build: ./services/tiktok-scraper
+    container_name: taspa-tiktok-scraper
+    environment:
+      SERVICE_NAME: tiktok-scraper
+      DATABASE_URL: postgresql://taspa:taspa@postgres:5432/taspa
+      RABBITMQ_URL: amqp://taspa:taspa@rabbitmq:5672
+      REALTIME_LOG_URL: http://realtime-log-service:8010
+      ORCHESTRATOR_URL: http://scraping-orchestrator:8005
+    depends_on:
+      - postgres
+      - rabbitmq
+    ports:
+      - "8008:8008"
+
+  realtime-log-service:
+    profiles: ["app"]
+    build: ./services/realtime-log-service
+    container_name: taspa-realtime-log-service
+    environment:
+      SERVICE_NAME: realtime-log-service
+      DATABASE_URL: postgresql://taspa:taspa@postgres:5432/taspa
+      RABBITMQ_URL: amqp://taspa:taspa@rabbitmq:5672
+      JWT_SECRET: dev-secret
+      JWT_ALGORITHM: HS256
+    depends_on:
+      - postgres
+      - rabbitmq
+    ports:
+      - "8010:8010"
+
+  nginx:
+    profiles: ["app"]
+    image: nginx:1.27-alpine
+    container_name: taspa-nginx
+    depends_on:
+      - api-gateway
+      - realtime-log-service
+    ports:
+      - "80:80"
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
+  minio_data:
