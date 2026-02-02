@@ -40,6 +40,7 @@ class ExportResponse(BaseModel):
 
 
 app = FastAPI(title="TASPA Export Service")
+app.router.redirect_slashes = False
 
 
 def _get_roles(request: Request) -> List[str]:

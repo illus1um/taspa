@@ -3,12 +3,16 @@ from typing import Dict, Iterable, Tuple
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request, Response, status
+from fastapi.middleware.cors import CORSMiddleware
 from jose import JWTError, jwt
 from pydantic import BaseModel
 
 
 JWT_SECRET = os.getenv("JWT_SECRET", "dev-secret")
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
+CORS_ALLOW_ORIGINS = os.getenv(
+    "CORS_ALLOW_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173"
+)
 
 SERVICE_MAP: Dict[str, str] = {
     "auth": os.getenv("AUTH_SERVICE_URL", ""),
@@ -32,6 +36,14 @@ HOP_BY_HOP_HEADERS = {
 
 
 app = FastAPI(title="TASPA API Gateway")
+app.router.redirect_slashes = False
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[o.strip() for o in CORS_ALLOW_ORIGINS.split(",") if o.strip()],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 class ScrapeStartRequest(BaseModel):
@@ -209,8 +221,9 @@ async def scrape_config_update(
     return Response(content=resp.content, status_code=resp.status_code, headers=response_headers)
 
 
+@app.api_route("/{service}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
 @app.api_route("/{service}/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
-async def proxy(service: str, path: str, request: Request) -> Response:
+async def proxy(service: str, request: Request, path: str = "") -> Response:
     base_url = SERVICE_MAP.get(service)
     if not base_url:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown service")

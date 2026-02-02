@@ -81,6 +81,7 @@ class DirectionGroupsResponse(BaseModel):
 
 
 app = FastAPI(title="TASPA Analytics Service")
+app.router.redirect_slashes = False
 router = APIRouter(prefix="/analytics")
 
 
@@ -286,11 +287,11 @@ def instagram_users(
         rows = conn.execute(
             text(
                 """
-                SELECT username, url, location
+                SELECT u.username, u.url, u.location
                 FROM instagram_users u
                 JOIN instagram_accounts a ON a.id = u.instagram_account_id
                 WHERE a.direction_id = :direction_id
-                ORDER BY username
+                ORDER BY u.username
                 LIMIT 500
                 """
             ),
@@ -329,11 +330,11 @@ def tiktok_users(
         rows = conn.execute(
             text(
                 """
-                SELECT username, url, location, followers_count
+                SELECT u.username, u.url, u.location, u.followers_count
                 FROM tiktok_users u
                 JOIN tiktok_accounts a ON a.id = u.tiktok_account_id
                 WHERE a.direction_id = :direction_id
-                ORDER BY username
+                ORDER BY u.username
                 LIMIT 500
                 """
             ),

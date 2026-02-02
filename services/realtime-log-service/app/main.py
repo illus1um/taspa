@@ -19,6 +19,7 @@ ALL_ROLES = {"user", "admin", "developer"}
 
 sio = socketio.AsyncServer(async_mode="asgi", cors_allowed_origins="*")
 fastapi_app = FastAPI(title="TASPA Realtime Log Service")
+fastapi_app.router.redirect_slashes = False
 app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app)
 
 

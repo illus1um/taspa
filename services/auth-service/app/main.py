@@ -43,6 +43,7 @@ class UserResponse(BaseModel):
 
 
 app = FastAPI(title="TASPA Auth Service")
+app.router.redirect_slashes = False
 
 
 def hash_password(password: str) -> str:

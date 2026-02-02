@@ -132,7 +132,7 @@ export const appTheme = createTheme({
     },
   },
   shape: {
-    borderRadius: 12,
+    borderRadius: 6,
   },
   shadows: [
     "none",
@@ -187,7 +187,7 @@ export const appTheme = createTheme({
     MuiButton: {
       styleOverrides: {
         root: {
-          borderRadius: 10,
+          borderRadius: 6,
           padding: "10px 20px",
           fontSize: "0.9rem",
           fontWeight: 600,
@@ -240,7 +240,7 @@ export const appTheme = createTheme({
     MuiCard: {
       styleOverrides: {
         root: {
-          borderRadius: 16,
+          borderRadius: 8,
           boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)",
           border: `1px solid ${colors.grey[100]}`,
         },
@@ -250,7 +250,7 @@ export const appTheme = createTheme({
       styleOverrides: {
         root: {
           "& .MuiOutlinedInput-root": {
-            borderRadius: 10,
+            borderRadius: 6,
             "&:hover .MuiOutlinedInput-notchedOutline": {
               borderColor: colors.primary.main,
             },
@@ -264,14 +264,14 @@ export const appTheme = createTheme({
     MuiOutlinedInput: {
       styleOverrides: {
         root: {
-          borderRadius: 10,
+          borderRadius: 6,
         },
       },
     },
     MuiSelect: {
       styleOverrides: {
         root: {
-          borderRadius: 10,
+          borderRadius: 6,
         },
       },
     },
@@ -279,7 +279,7 @@ export const appTheme = createTheme({
       styleOverrides: {
         root: {
           fontWeight: 500,
-          borderRadius: 8,
+          borderRadius: 6,
         },
         colorSuccess: {
           backgroundColor: alpha(colors.success.main, 0.12),
@@ -302,7 +302,7 @@ export const appTheme = createTheme({
     MuiAlert: {
       styleOverrides: {
         root: {
-          borderRadius: 12,
+          borderRadius: 8,
         },
         standardSuccess: {
           backgroundColor: alpha(colors.success.main, 0.12),
@@ -365,7 +365,7 @@ export const appTheme = createTheme({
       styleOverrides: {
         indicator: {
           height: 3,
-          borderRadius: 3,
+          borderRadius: 2,
         },
       },
     },
@@ -404,7 +404,7 @@ export const appTheme = createTheme({
     MuiListItemButton: {
       styleOverrides: {
         root: {
-          borderRadius: 10,
+          borderRadius: 6,
           margin: "2px 8px",
           "&.Mui-selected": {
             backgroundColor: alpha(colors.primary.main, 0.1),
@@ -418,7 +418,7 @@ export const appTheme = createTheme({
     MuiDialog: {
       styleOverrides: {
         paper: {
-          borderRadius: 16,
+          borderRadius: 8,
         },
       },
     },

@@ -39,6 +39,7 @@ class SourceResponse(BaseModel):
 
 
 app = FastAPI(title="TASPA Direction Service")
+app.router.redirect_slashes = False
 
 
 def _get_roles(request: Request) -> List[str]:

@@ -60,6 +60,7 @@ class ServiceConfigUpdate(BaseModel):
 
 
 app = FastAPI(title="TASPA Scraping Orchestrator")
+app.router.redirect_slashes = False
 
 SCRAPER_CONFIG: Dict[str, ServiceConfig] = {
     "vk": ServiceConfig(),
