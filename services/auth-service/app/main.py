@@ -56,6 +56,12 @@ class UpdateProfileRequest(BaseModel):
     last_name: Optional[str] = None
 
 
+class UpdateUserRequest(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[EmailStr] = None
+
+
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
@@ -586,6 +592,68 @@ def reset_password(
             {"id": user_id, "password_hash": hash_password(data.password)},
         ).fetchone()
         roles = get_user_roles(conn, row[0])
+    return UserResponse(
+        id=row[0],
+        email=row[1],
+        roles=roles,
+        is_active=row[2],
+        first_name=row[3],
+        last_name=row[4],
+    )
+
+
+@app.put("/auth/users/{user_id}", response_model=UserResponse)
+def update_user(
+    user_id: int,
+    data: UpdateUserRequest,
+    current_user: UserResponse = Depends(require_role("admin")),
+) -> UserResponse:
+    with engine.begin() as conn:
+        target_row = conn.execute(
+            text("SELECT id FROM users WHERE id = :id"),
+            {"id": user_id},
+        ).fetchone()
+        if not target_row:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+        target_roles = get_user_roles(conn, user_id)
+        if not has_role(current_user.roles, "developer"):
+            if has_role(target_roles, "admin") or has_role(target_roles, "developer"):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Admin can manage only users",
+                )
+
+        if data.email:
+            existing = conn.execute(
+                text("SELECT id FROM users WHERE email = :email AND id != :id"),
+                {"email": data.email, "id": user_id},
+            ).fetchone()
+            if existing:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already exists")
+
+        conn.execute(
+            text(
+                """
+                UPDATE users
+                SET first_name = COALESCE(:first_name, first_name),
+                    last_name = COALESCE(:last_name, last_name),
+                    email = COALESCE(:email, email)
+                WHERE id = :id
+                """
+            ),
+            {
+                "first_name": data.first_name,
+                "last_name": data.last_name,
+                "email": data.email,
+                "id": user_id,
+            },
+        )
+        row = conn.execute(
+            text("SELECT id, email, is_active, first_name, last_name FROM users WHERE id = :id"),
+            {"id": user_id},
+        ).fetchone()
+        roles = get_user_roles(conn, user_id)
     return UserResponse(
         id=row[0],
         email=row[1],

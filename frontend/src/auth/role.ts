@@ -15,12 +15,6 @@ export const hasRole = (roles: Role[], required: Role) => {
   return getRoleLevel(roles) >= ROLE_LEVEL[required];
 };
 
-export const getDefaultPath = (roles: Role[]) => {
-  if (hasRole(roles, "developer")) {
-    return "/developer";
-  }
-  if (hasRole(roles, "admin")) {
-    return "/admin";
-  }
-  return "/analytics/vk";
+export const getDefaultPath = (_roles: Role[]) => {
+  return "/home";
 };

@@ -16,7 +16,7 @@ export const RequireRole = ({
     return <Navigate to="/login" replace />;
   }
   if (!hasRole(user.roles, role)) {
-    return <Navigate to="/analytics/vk" replace />;
+    return <Navigate to="/home" replace />;
   }
   return children;
 };

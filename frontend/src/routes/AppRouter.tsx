@@ -6,6 +6,7 @@ import { MainLayout } from "../layouts/MainLayout";
 import { AdminDirectionsPage } from "../pages/AdminDirectionsPage";
 import { AdminUsersPage } from "../pages/AdminUsersPage";
 import { DeveloperScrapingPage } from "../pages/DeveloperScrapingPage";
+import { HomePage } from "../pages/HomePage";
 import { LoginPage } from "../pages/LoginPage";
 import { NotFoundPage } from "../pages/NotFoundPage";
 import { ProfilePage } from "../pages/ProfilePage";
@@ -17,7 +18,8 @@ export const AppRouter = () => {
       <Route path="/login" element={<LoginPage />} />
       <Route element={<RequireAuth />}>
         <Route element={<MainLayout />}>
-          <Route path="/user" element={<Navigate to="/analytics/vk" replace />} />
+          <Route path="/home" element={<HomePage />} />
+          <Route path="/user" element={<Navigate to="/home" replace />} />
           <Route path="/analytics" element={<Navigate to="/analytics/vk" replace />} />
           <Route path="/analytics/:platform" element={<UserAnalyticsPage />} />
           <Route path="/profile" element={<ProfilePage />} />
@@ -47,7 +49,7 @@ export const AppRouter = () => {
           />
         </Route>
       </Route>
-      <Route path="/" element={<Navigate to="/analytics/vk" replace />} />
+      <Route path="/" element={<Navigate to="/home" replace />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );

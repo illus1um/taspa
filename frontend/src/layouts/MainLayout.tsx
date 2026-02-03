@@ -34,6 +34,7 @@ import {
   Settings,
   ExpandMore,
   People,
+  Home,
 } from "@mui/icons-material";
 import { useEffect, useMemo, useState } from "react";
 
@@ -64,6 +65,12 @@ export const MainLayout = () => {
   const [analyticsOpen, setAnalyticsOpen] = useState(true);
 
   const navItems: NavItem[] = [
+    {
+      label: "Главная",
+      to: "/home",
+      icon: <Home />,
+      show: true,
+    },
     {
       label: "Направления",
       to: "/admin",
@@ -163,6 +170,9 @@ export const MainLayout = () => {
   const isAnalyticsActive = location.pathname.startsWith("/analytics");
 
   const pageTitle = useMemo(() => {
+    if (location.pathname === "/home") {
+      return "Главная";
+    }
     if (location.pathname.startsWith("/analytics/vk")) {
       return "VK аналитика";
     }
@@ -211,7 +221,7 @@ export const MainLayout = () => {
               justifyContent: "flex-start",
               flex: 1,
             }}
-            onClick={() => handleNavigate("/user")}
+            onClick={() => handleNavigate("/home")}
           >
             <Box
               component="img"
@@ -244,6 +254,52 @@ export const MainLayout = () => {
 
       {/* Navigation */}
       <List sx={{ flex: 1, py: 2, px: 1 }}>
+        {navItems.slice(0, 1).map((item) => {
+          const isActive = location.pathname === item.to;
+          return (
+            <Tooltip
+              key={item.to}
+              title={collapsed && !isMobile ? item.label : ""}
+              placement="right"
+            >
+              <ListItemButton
+                onClick={() => handleNavigate(item.to)}
+                sx={{
+                  borderRadius: 2,
+                  mb: 0.5,
+                  py: 1.25,
+                  px: collapsed && !isMobile ? 1.5 : 2,
+                  justifyContent: collapsed && !isMobile ? "center" : "flex-start",
+                  backgroundColor: isActive ? alpha("#fff", 0.15) : "transparent",
+                  "&:hover": {
+                    backgroundColor: isActive ? alpha("#fff", 0.2) : alpha("#fff", 0.08),
+                  },
+                  transition: "all 0.2s",
+                }}
+              >
+                <ListItemIcon
+                  sx={{
+                    minWidth: collapsed && !isMobile ? 0 : 40,
+                    color: isActive ? "#fff" : alpha("#fff", 0.7),
+                  }}
+                >
+                  {item.icon}
+                </ListItemIcon>
+                {(!collapsed || isMobile) && (
+                  <ListItemText
+                    primary={item.label}
+                    primaryTypographyProps={{
+                      fontWeight: isActive ? 600 : 500,
+                      fontSize: "0.9rem",
+                      color: isActive ? "#fff" : alpha("#fff", 0.8),
+                    }}
+                  />
+                )}
+              </ListItemButton>
+            </Tooltip>
+          );
+        })}
+
         {/* Analytics section */}
         <Tooltip title={collapsed && !isMobile ? "Аналитика" : ""} placement="right">
           <ListItemButton
@@ -335,7 +391,7 @@ export const MainLayout = () => {
           </List>
         </Collapse>
 
-        {navItems.map((item) => {
+        {navItems.slice(1).map((item) => {
           const isActive = location.pathname === item.to;
           return (
             <Tooltip
@@ -351,13 +407,9 @@ export const MainLayout = () => {
                   py: 1.25,
                   px: collapsed && !isMobile ? 1.5 : 2,
                   justifyContent: collapsed && !isMobile ? "center" : "flex-start",
-                  backgroundColor: isActive
-                    ? alpha("#fff", 0.15)
-                    : "transparent",
+                  backgroundColor: isActive ? alpha("#fff", 0.15) : "transparent",
                   "&:hover": {
-                    backgroundColor: isActive
-                      ? alpha("#fff", 0.2)
-                      : alpha("#fff", 0.08),
+                    backgroundColor: isActive ? alpha("#fff", 0.2) : alpha("#fff", 0.08),
                   },
                   transition: "all 0.2s",
                 }}
@@ -384,6 +436,7 @@ export const MainLayout = () => {
             </Tooltip>
           );
         })}
+
       </List>
 
       {/* User info */}
