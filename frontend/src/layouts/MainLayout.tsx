@@ -3,6 +3,7 @@ import {
   AppBar,
   Avatar,
   Box,
+  Collapse,
   Drawer,
   IconButton,
   List,
@@ -31,10 +32,13 @@ import {
   ChevronLeft,
   Notifications,
   Settings,
+  ExpandMore,
+  People,
 } from "@mui/icons-material";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "../auth/AuthContext";
+import { hasRole } from "../auth/role";
 import { colors } from "../theme";
 
 const DRAWER_WIDTH = 260;
@@ -57,30 +61,48 @@ export const MainLayout = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [analyticsOpen, setAnalyticsOpen] = useState(true);
 
   const navItems: NavItem[] = [
-    {
-      label: "Аналитика",
-      to: "/user",
-      icon: <Dashboard />,
-      show: true,
-    },
     {
       label: "Направления",
       to: "/admin",
       icon: <AdminPanelSettings />,
-      show: user?.roles.includes("admin") ?? false,
+      show: user ? hasRole(user.roles, "admin") : false,
+    },
+    {
+      label: "Пользователи",
+      to: "/admin/users",
+      icon: <People />,
+      show: user ? hasRole(user.roles, "admin") : false,
     },
     {
       label: "Скрапинг",
       to: "/developer",
       icon: <Code />,
-      show: user?.roles.includes("developer") ?? false,
+      show: user ? hasRole(user.roles, "developer") : false,
     },
   ].filter((item) => item.show);
 
+  const analyticsItems = useMemo(
+    () => [
+      { label: "VK", to: "/analytics/vk", color: "#4A76A8" },
+      { label: "Instagram", to: "/analytics/instagram", color: "#E1306C" },
+      { label: "TikTok", to: "/analytics/tiktok", color: "#111827" },
+    ],
+    []
+  );
+
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
+  };
+
+  const handleAnalyticsToggle = () => {
+    if (collapsed && !isMobile) {
+      handleNavigate("/analytics/vk");
+      return;
+    }
+    setAnalyticsOpen((prev) => !prev);
   };
 
   const handleNavigate = (path: string) => {
@@ -89,6 +111,12 @@ export const MainLayout = () => {
       setMobileOpen(false);
     }
   };
+
+  useEffect(() => {
+    if (location.pathname.startsWith("/analytics")) {
+      setAnalyticsOpen(true);
+    }
+  }, [location.pathname]);
 
   const handleMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -114,6 +142,24 @@ export const MainLayout = () => {
   };
 
   const drawerWidth = isMobile ? DRAWER_WIDTH : collapsed ? DRAWER_WIDTH_COLLAPSED : DRAWER_WIDTH;
+  const isAnalyticsActive = location.pathname.startsWith("/analytics");
+
+  const pageTitle = useMemo(() => {
+    if (location.pathname.startsWith("/analytics/vk")) {
+      return "VK аналитика";
+    }
+    if (location.pathname.startsWith("/analytics/instagram")) {
+      return "Instagram аналитика";
+    }
+    if (location.pathname.startsWith("/analytics/tiktok")) {
+      return "TikTok аналитика";
+    }
+    if (location.pathname.startsWith("/admin/users")) {
+      return "Пользователи";
+    }
+    const navMatch = navItems.find((item) => location.pathname.startsWith(item.to));
+    return navMatch?.label || "Аналитика";
+  }, [location.pathname, navItems]);
 
   const drawerContent = (
     <Box
@@ -177,6 +223,97 @@ export const MainLayout = () => {
 
       {/* Navigation */}
       <List sx={{ flex: 1, py: 2, px: 1 }}>
+        {/* Analytics section */}
+        <Tooltip title={collapsed && !isMobile ? "Аналитика" : ""} placement="right">
+          <ListItemButton
+            onClick={handleAnalyticsToggle}
+            sx={{
+              borderRadius: 2,
+              mb: 0.5,
+              py: 1.25,
+              px: collapsed && !isMobile ? 1.5 : 2,
+              justifyContent: collapsed && !isMobile ? "center" : "flex-start",
+              backgroundColor: isAnalyticsActive ? alpha("#fff", 0.15) : "transparent",
+              "&:hover": {
+                backgroundColor: isAnalyticsActive ? alpha("#fff", 0.2) : alpha("#fff", 0.08),
+              },
+              transition: "all 0.2s",
+            }}
+          >
+            <ListItemIcon
+              sx={{
+                minWidth: collapsed && !isMobile ? 0 : 40,
+                color: isAnalyticsActive ? "#fff" : alpha("#fff", 0.7),
+              }}
+            >
+              <Dashboard />
+            </ListItemIcon>
+            {(!collapsed || isMobile) && (
+              <>
+                <ListItemText
+                  primary="Аналитика"
+                  primaryTypographyProps={{
+                    fontWeight: isAnalyticsActive ? 600 : 500,
+                    fontSize: "0.9rem",
+                    color: isAnalyticsActive ? "#fff" : alpha("#fff", 0.8),
+                  }}
+                />
+                <ExpandMore
+                  sx={{
+                    color: alpha("#fff", 0.7),
+                    transform: analyticsOpen ? "rotate(180deg)" : "rotate(0deg)",
+                    transition: "transform 0.2s",
+                  }}
+                />
+              </>
+            )}
+          </ListItemButton>
+        </Tooltip>
+
+        <Collapse in={analyticsOpen && (!collapsed || isMobile)} timeout="auto" unmountOnExit>
+          <List component="div" disablePadding sx={{ pl: 2 }}>
+            {analyticsItems.map((item) => {
+              const isActive = location.pathname === item.to;
+              return (
+                <ListItemButton
+                  key={item.to}
+                  onClick={() => handleNavigate(item.to)}
+                  sx={{
+                    borderRadius: 2,
+                    mb: 0.5,
+                    py: 1,
+                    px: 2,
+                    backgroundColor: isActive ? alpha("#fff", 0.15) : "transparent",
+                    "&:hover": {
+                      backgroundColor: isActive ? alpha("#fff", 0.2) : alpha("#fff", 0.08),
+                    },
+                  }}
+                >
+                  <ListItemIcon sx={{ minWidth: 28 }}>
+                    <Box
+                      sx={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: "50%",
+                        bgcolor: item.color,
+                        boxShadow: `0 0 0 2px ${alpha(item.color, 0.25)}`,
+                      }}
+                    />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={item.label}
+                    primaryTypographyProps={{
+                      fontWeight: isActive ? 600 : 500,
+                      fontSize: "0.85rem",
+                      color: isActive ? "#fff" : alpha("#fff", 0.8),
+                    }}
+                  />
+                </ListItemButton>
+              );
+            })}
+          </List>
+        </Collapse>
+
         {navItems.map((item) => {
           const isActive = location.pathname === item.to;
           return (
@@ -356,8 +493,7 @@ export const MainLayout = () => {
                 variant="h6"
                 sx={{ color: colors.grey[800], fontWeight: 600 }}
               >
-                {navItems.find((item) => item.to === location.pathname)?.label ||
-                  "Аналитика"}
+                {pageTitle}
               </Typography>
             </Box>
 

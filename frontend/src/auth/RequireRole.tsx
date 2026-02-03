@@ -1,6 +1,7 @@
 import { Navigate } from "react-router-dom";
 
 import { useAuth } from "./AuthContext";
+import { hasRole } from "./role";
 import { Role } from "./types";
 
 export const RequireRole = ({
@@ -14,8 +15,8 @@ export const RequireRole = ({
   if (!user) {
     return <Navigate to="/login" replace />;
   }
-  if (!user.roles.includes(role)) {
-    return <Navigate to="/user" replace />;
+  if (!hasRole(user.roles, role)) {
+    return <Navigate to="/analytics/vk" replace />;
   }
   return children;
 };

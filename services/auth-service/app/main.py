@@ -17,6 +17,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60")
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+ROLE_LEVELS = {"user": 1, "admin": 2, "developer": 3}
+
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -75,6 +77,16 @@ def get_user_roles(conn, user_id: int) -> List[str]:
     return [r[0] for r in rows]
 
 
+def _get_role_level(roles: List[str]) -> int:
+    if not roles:
+        return 0
+    return max(ROLE_LEVELS.get(role, 0) for role in roles)
+
+
+def has_role(roles: List[str], required: str) -> bool:
+    return _get_role_level(roles) >= ROLE_LEVELS.get(required, 0)
+
+
 def get_current_user(request: Request) -> UserResponse:
     auth_header = request.headers.get("Authorization", "")
     if not auth_header.startswith("Bearer "):
@@ -111,7 +123,7 @@ def get_current_user_optional(request: Request) -> Optional[UserResponse]:
 
 def require_role(role: str):
     def _require(user: UserResponse = Depends(get_current_user)) -> UserResponse:
-        if role not in user.roles:
+        if not has_role(user.roles, role):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Forbidden")
         return user
 
@@ -163,10 +175,22 @@ def create_user(
     with engine.begin() as conn:
         users_count = conn.execute(text("SELECT COUNT(*) FROM users")).scalar() or 0
         if users_count > 0:
-            if not current_user or "admin" not in current_user.roles:
+            if not current_user:
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
+            if not has_role(current_user.roles, "admin"):
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
+            if not has_role(current_user.roles, "developer") and data.role != "user":
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Admin can create only users",
+                )
         if data.role not in ["user", "admin", "developer"]:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid role")
+        if users_count == 0 and data.role not in ["admin", "developer"]:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="First user must be admin or developer",
+            )
 
         role_row = conn.execute(
             text("SELECT id FROM roles WHERE name = :name"),
@@ -229,9 +253,24 @@ def list_users(_: UserResponse = Depends(require_role("admin"))) -> List[UserRes
 
 @app.post("/auth/users/{user_id}/block", response_model=UserResponse)
 def block_user(
-    user_id: int, _: UserResponse = Depends(require_role("admin"))
+    user_id: int, current_user: UserResponse = Depends(require_role("admin"))
 ) -> UserResponse:
     with engine.begin() as conn:
+        target_row = conn.execute(
+            text("SELECT id, email, is_active FROM users WHERE id = :id"),
+            {"id": user_id},
+        ).fetchone()
+        if not target_row:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        target_roles = get_user_roles(conn, target_row[0])
+
+        if not has_role(current_user.roles, "developer"):
+            if has_role(target_roles, "admin") or has_role(target_roles, "developer"):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Admin can manage only users",
+                )
+
         row = conn.execute(
             text(
                 """
@@ -243,17 +282,30 @@ def block_user(
             ),
             {"id": user_id},
         ).fetchone()
-        if not row:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         roles = get_user_roles(conn, row[0])
     return UserResponse(id=row[0], email=row[1], roles=roles, is_active=row[2])
 
 
 @app.post("/auth/users/{user_id}/unblock", response_model=UserResponse)
 def unblock_user(
-    user_id: int, _: UserResponse = Depends(require_role("admin"))
+    user_id: int, current_user: UserResponse = Depends(require_role("admin"))
 ) -> UserResponse:
     with engine.begin() as conn:
+        target_row = conn.execute(
+            text("SELECT id, email, is_active FROM users WHERE id = :id"),
+            {"id": user_id},
+        ).fetchone()
+        if not target_row:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        target_roles = get_user_roles(conn, target_row[0])
+
+        if not has_role(current_user.roles, "developer"):
+            if has_role(target_roles, "admin") or has_role(target_roles, "developer"):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Admin can manage only users",
+                )
+
         row = conn.execute(
             text(
                 """
@@ -265,8 +317,6 @@ def unblock_user(
             ),
             {"id": user_id},
         ).fetchone()
-        if not row:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
         roles = get_user_roles(conn, row[0])
     return UserResponse(id=row[0], email=row[1], roles=roles, is_active=row[2])
 

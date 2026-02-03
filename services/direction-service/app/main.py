@@ -11,6 +11,7 @@ engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 
 ALLOWED_SOURCE_TYPES = {"vk_group", "instagram_account", "tiktok_account"}
 ALL_ROLES = {"user", "admin", "developer"}
+ROLE_LEVELS = {"user": 1, "admin": 2, "developer": 3}
 
 
 class DirectionCreate(BaseModel):
@@ -59,7 +60,7 @@ def require_any_role(request: Request) -> List[str]:
 
 def require_admin(request: Request) -> List[str]:
     roles = _get_roles(request)
-    if "admin" not in roles:
+    if max(ROLE_LEVELS.get(role, 0) for role in roles) < ROLE_LEVELS["admin"]:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin only")
     return roles
 

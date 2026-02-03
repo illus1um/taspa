@@ -14,8 +14,6 @@ import {
   Select,
   Skeleton,
   Stack,
-  Tab,
-  Tabs,
   Table,
   TableBody,
   TableCell,
@@ -43,7 +41,8 @@ import {
   OpenInNew,
   FilterList,
 } from "@mui/icons-material";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   CartesianGrid,
   Cell,
@@ -214,7 +213,15 @@ export const UserAnalyticsPage = () => {
   const [loadingDirections, setLoadingDirections] = useState(true);
   const [loadingData, setLoadingData] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [tab, setTab] = useState(0);
+  const { platform } = useParams();
+  const navigate = useNavigate();
+  const platformToTab = useMemo(
+    () => ({ vk: 0, instagram: 1, tiktok: 2 }),
+    []
+  );
+  const [activePlatform, setActivePlatform] = useState(
+    platform && platformToTab[platform] !== undefined ? platform : "vk"
+  );
 
   const [summary, setSummary] = useState<VkSummary | null>(null);
   const [gender, setGender] = useState<VkGenderItem[]>([]);
@@ -249,6 +256,14 @@ export const UserAnalyticsPage = () => {
     };
     loadDirections();
   }, []);
+
+  useEffect(() => {
+    if (!platform || platformToTab[platform] === undefined) {
+      navigate("/analytics/vk", { replace: true });
+      return;
+    }
+    setActivePlatform(platform);
+  }, [platform, platformToTab, navigate]);
 
   useEffect(() => {
     if (!directionId) {
@@ -407,71 +422,8 @@ export const UserAnalyticsPage = () => {
         </Alert>
       )}
 
-      {/* Табы */}
-      <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
-        <Tabs
-          value={tab}
-          onChange={(_, value) => setTab(value)}
-          sx={{
-            "& .MuiTab-root": {
-              minHeight: 56,
-              px: 3,
-            },
-          }}
-        >
-          <Tab
-            label={
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Box
-                  component="span"
-                  sx={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: "50%",
-                    bgcolor: "#4A76A8",
-                  }}
-                />
-                <span>ВКонтакте</span>
-              </Stack>
-            }
-          />
-          <Tab
-            label={
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Box
-                  component="span"
-                  sx={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: "50%",
-                    background: "linear-gradient(45deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888)",
-                  }}
-                />
-                <span>Instagram</span>
-              </Stack>
-            }
-          />
-          <Tab
-            label={
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Box
-                  component="span"
-                  sx={{
-                    width: 8,
-                    height: 8,
-                    borderRadius: "50%",
-                    bgcolor: "#000",
-                  }}
-                />
-                <span>TikTok</span>
-              </Stack>
-            }
-          />
-        </Tabs>
-      </Box>
-
       {/* ВКонтакте */}
-      {tab === 0 && (
+      {activePlatform === "vk" && (
         <Stack spacing={3}>
           {/* Статистика */}
           <Grid container spacing={3}>
@@ -834,7 +786,7 @@ export const UserAnalyticsPage = () => {
       )}
 
       {/* Instagram */}
-      {tab === 1 && (
+      {activePlatform === "instagram" && (
         <Stack spacing={3}>
           <Grid container spacing={3}>
             <Grid item xs={12} sm={6}>
@@ -968,7 +920,7 @@ export const UserAnalyticsPage = () => {
       )}
 
       {/* TikTok */}
-      {tab === 2 && (
+      {activePlatform === "tiktok" && (
         <Stack spacing={3}>
           <Grid container spacing={3}>
             <Grid item xs={12} sm={6}>

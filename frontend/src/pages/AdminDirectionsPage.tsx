@@ -1,11 +1,9 @@
 import {
   Alert,
-  Avatar,
   Box,
   Button,
   Card,
   CardContent,
-  Chip,
   Dialog,
   DialogActions,
   DialogContent,
@@ -14,7 +12,6 @@ import {
   FormControl,
   Grid,
   IconButton,
-  InputAdornment,
   InputLabel,
   MenuItem,
   Select,
@@ -35,17 +32,10 @@ import {
   Delete,
   Folder,
   FolderOpen,
-  People,
-  PersonAdd,
-  Block,
-  CheckCircle,
   Instagram,
   Code,
   ContentPaste,
   Close,
-  Search,
-  Edit,
-  MoreVert,
   CloudUpload,
 } from "@mui/icons-material";
 import { useEffect, useState } from "react";
@@ -59,12 +49,6 @@ type Source = {
   direction_id: number;
   source_type: "vk_group" | "instagram_account" | "tiktok_account";
   source_identifier: string;
-};
-type UserItem = {
-  id: number;
-  email: string;
-  roles: string[];
-  is_active: boolean;
 };
 
 // Компонент секции
@@ -211,18 +195,12 @@ export const AdminDirectionsPage = () => {
   const [directions, setDirections] = useState<Direction[]>([]);
   const [selectedDirectionId, setSelectedDirectionId] = useState<number | "">("");
   const [sources, setSources] = useState<Source[]>([]);
-  const [users, setUsers] = useState<UserItem[]>([]);
 
   const [directionName, setDirectionName] = useState("");
   const [sourceType, setSourceType] = useState<Source["source_type"]>("vk_group");
   const [sourceIdentifier, setSourceIdentifier] = useState("");
   const [bulkSources, setBulkSources] = useState("");
   const [showBulkDialog, setShowBulkDialog] = useState(false);
-
-  const [userEmail, setUserEmail] = useState("");
-  const [userPassword, setUserPassword] = useState("");
-  const [userRole, setUserRole] = useState("user");
-  const [showUserDialog, setShowUserDialog] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -240,16 +218,11 @@ export const AdminDirectionsPage = () => {
     setSources(data);
   };
 
-  const loadUsers = async () => {
-    const data = (await apiFetch("/auth/users")) as UserItem[];
-    setUsers(data);
-  };
-
   useEffect(() => {
     const init = async () => {
       setError(null);
       try {
-        await Promise.all([loadDirections(), loadUsers()]);
+        await loadDirections();
       } catch (err) {
         setError((err as Error).message);
       }
@@ -377,58 +350,7 @@ export const AdminDirectionsPage = () => {
     }
   };
 
-  const handleCreateUser = async () => {
-    if (!userEmail.trim() || !userPassword.trim()) return;
-    setError(null);
-    setSuccess(null);
-    try {
-      await apiFetch("/auth/users", {
-        method: "POST",
-        body: JSON.stringify({
-          email: userEmail.trim(),
-          password: userPassword,
-          role: userRole,
-        }),
-      });
-      setUserEmail("");
-      setUserPassword("");
-      setShowUserDialog(false);
-      await loadUsers();
-      setSuccess("Пользователь создан");
-    } catch (err) {
-      setError((err as Error).message);
-    }
-  };
-
-  const handleToggleBlock = async (user: UserItem) => {
-    setError(null);
-    setSuccess(null);
-    try {
-      const action = user.is_active ? "block" : "unblock";
-      await apiFetch(`/auth/users/${user.id}/${action}`, { method: "POST" });
-      await loadUsers();
-      setSuccess(user.is_active ? "Пользователь заблокирован" : "Пользователь разблокирован");
-    } catch (err) {
-      setError((err as Error).message);
-    }
-  };
-
   const selectedDirection = directions.find((d) => d.id === selectedDirectionId);
-
-  const getRoleColor = (role: string) => {
-    switch (role) {
-      case "admin":
-        return "error";
-      case "developer":
-        return "warning";
-      default:
-        return "primary";
-    }
-  };
-
-  const getUserInitials = (email: string) => {
-    return email.charAt(0).toUpperCase();
-  };
 
   return (
     <Stack spacing={3}>
@@ -438,7 +360,7 @@ export const AdminDirectionsPage = () => {
           Управление направлениями
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Создание направлений, добавление источников и управление пользователями
+          Создание направлений и добавление источников
         </Typography>
       </Box>
 
@@ -700,105 +622,6 @@ export const AdminDirectionsPage = () => {
         </Grid>
       </Grid>
 
-      {/* Пользователи */}
-      <SectionCard
-        title="Пользователи системы"
-        icon={<People sx={{ color: "#fff", fontSize: 20 }} />}
-        headerColor={`linear-gradient(135deg, ${colors.info.main} 0%, ${colors.info.dark} 100%)`}
-        action={
-          <Button
-            variant="contained"
-            startIcon={<PersonAdd />}
-            onClick={() => setShowUserDialog(true)}
-          >
-            Добавить
-          </Button>
-        }
-      >
-        <TableContainer>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Пользователь</TableCell>
-                <TableCell>Роли</TableCell>
-                <TableCell>Статус</TableCell>
-                <TableCell align="right">Действия</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {users.map((user) => (
-                <TableRow key={user.id}>
-                  <TableCell>
-                    <Stack direction="row" spacing={1.5} alignItems="center">
-                      <Avatar
-                        sx={{
-                          width: 36,
-                          height: 36,
-                          bgcolor: user.is_active
-                            ? colors.primary.main
-                            : colors.grey[400],
-                          fontSize: "0.9rem",
-                        }}
-                      >
-                        {getUserInitials(user.email)}
-                      </Avatar>
-                      <Box>
-                        <Typography fontWeight={500}>{user.email}</Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          ID: {user.id}
-                        </Typography>
-                      </Box>
-                    </Stack>
-                  </TableCell>
-                  <TableCell>
-                    <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
-                      {user.roles.map((role) => (
-                        <Chip
-                          key={role}
-                          label={role}
-                          size="small"
-                          color={getRoleColor(role) as any}
-                          variant="outlined"
-                        />
-                      ))}
-                    </Stack>
-                  </TableCell>
-                  <TableCell>
-                    <Chip
-                      icon={user.is_active ? <CheckCircle /> : <Block />}
-                      label={user.is_active ? "Активен" : "Заблокирован"}
-                      size="small"
-                      color={user.is_active ? "success" : "default"}
-                      variant="outlined"
-                    />
-                  </TableCell>
-                  <TableCell align="right">
-                    <Tooltip title={user.is_active ? "Заблокировать" : "Разблокировать"}>
-                      <IconButton
-                        size="small"
-                        color={user.is_active ? "error" : "success"}
-                        onClick={() => handleToggleBlock(user)}
-                      >
-                        {user.is_active ? <Block /> : <CheckCircle />}
-                      </IconButton>
-                    </Tooltip>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {!users.length && (
-                <TableRow>
-                  <TableCell colSpan={4}>
-                    <Box sx={{ py: 4, textAlign: "center", color: "text.secondary" }}>
-                      <Typography variant="body2">Нет пользователей</Typography>
-                    </Box>
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </SectionCard>
-
       {/* Диалог массового добавления */}
       <Dialog
         open={showBulkDialog}
@@ -861,62 +684,6 @@ export const AdminDirectionsPage = () => {
         </DialogActions>
       </Dialog>
 
-      {/* Диалог создания пользователя */}
-      <Dialog
-        open={showUserDialog}
-        onClose={() => setShowUserDialog(false)}
-        maxWidth="xs"
-        fullWidth
-      >
-        <DialogTitle>
-          <Stack direction="row" justifyContent="space-between" alignItems="center">
-            <Typography variant="h6">Создание пользователя</Typography>
-            <IconButton onClick={() => setShowUserDialog(false)} size="small">
-              <Close />
-            </IconButton>
-          </Stack>
-        </DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField
-              label="Email"
-              type="email"
-              value={userEmail}
-              onChange={(event) => setUserEmail(event.target.value)}
-              fullWidth
-            />
-            <TextField
-              label="Пароль"
-              type="password"
-              value={userPassword}
-              onChange={(event) => setUserPassword(event.target.value)}
-              fullWidth
-            />
-            <FormControl fullWidth>
-              <InputLabel>Роль</InputLabel>
-              <Select
-                label="Роль"
-                value={userRole}
-                onChange={(event) => setUserRole(String(event.target.value))}
-              >
-                <MenuItem value="user">User — только просмотр</MenuItem>
-                <MenuItem value="admin">Admin — управление</MenuItem>
-                <MenuItem value="developer">Developer — скрапинг</MenuItem>
-              </Select>
-            </FormControl>
-          </Stack>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setShowUserDialog(false)}>Отмена</Button>
-          <Button
-            variant="contained"
-            onClick={handleCreateUser}
-            startIcon={<PersonAdd />}
-          >
-            Создать
-          </Button>
-        </DialogActions>
-      </Dialog>
     </Stack>
   );
 };

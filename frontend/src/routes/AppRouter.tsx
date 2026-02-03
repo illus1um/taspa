@@ -4,6 +4,7 @@ import { RequireAuth } from "../auth/RequireAuth";
 import { RequireRole } from "../auth/RequireRole";
 import { MainLayout } from "../layouts/MainLayout";
 import { AdminDirectionsPage } from "../pages/AdminDirectionsPage";
+import { AdminUsersPage } from "../pages/AdminUsersPage";
 import { DeveloperScrapingPage } from "../pages/DeveloperScrapingPage";
 import { LoginPage } from "../pages/LoginPage";
 import { NotFoundPage } from "../pages/NotFoundPage";
@@ -15,12 +16,22 @@ export const AppRouter = () => {
       <Route path="/login" element={<LoginPage />} />
       <Route element={<RequireAuth />}>
         <Route element={<MainLayout />}>
-          <Route path="/user" element={<UserAnalyticsPage />} />
+          <Route path="/user" element={<Navigate to="/analytics/vk" replace />} />
+          <Route path="/analytics" element={<Navigate to="/analytics/vk" replace />} />
+          <Route path="/analytics/:platform" element={<UserAnalyticsPage />} />
           <Route
             path="/admin"
             element={
               <RequireRole role="admin">
                 <AdminDirectionsPage />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/admin/users"
+            element={
+              <RequireRole role="admin">
+                <AdminUsersPage />
               </RequireRole>
             }
           />
@@ -34,7 +45,7 @@ export const AppRouter = () => {
           />
         </Route>
       </Route>
-      <Route path="/" element={<Navigate to="/user" replace />} />
+      <Route path="/" element={<Navigate to="/analytics/vk" replace />} />
       <Route path="*" element={<NotFoundPage />} />
     </Routes>
   );
