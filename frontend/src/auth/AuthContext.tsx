@@ -69,6 +69,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const logout = () => {
+    apiFetch("/auth/logout", { method: "POST" }).catch(() => undefined);
     clearToken();
     setUser(null);
   };
