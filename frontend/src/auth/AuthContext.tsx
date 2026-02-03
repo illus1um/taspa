@@ -21,6 +21,7 @@ type AuthContextValue = {
   loading: boolean;
   login: (email: string, password: string) => Promise<LoginResult>;
   logout: () => void;
+  refreshUser: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -32,7 +33,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const loadMe = async () => {
     try {
       const me = await apiFetch("/auth/me");
-      setUser({ email: me.email, roles: me.roles });
+      setUser({
+        email: me.email,
+        roles: me.roles,
+        first_name: me.first_name ?? null,
+        last_name: me.last_name ?? null,
+      });
     } catch {
       clearToken();
       setUser(null);
@@ -59,7 +65,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       });
       setToken(result.access_token);
       const me = await apiFetch("/auth/me");
-      setUser({ email: me.email, roles: me.roles });
+      setUser({
+        email: me.email,
+        roles: me.roles,
+        first_name: me.first_name ?? null,
+        last_name: me.last_name ?? null,
+      });
       return { ok: true, roles: me.roles };
     } catch (err) {
       clearToken();
@@ -74,12 +85,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     setUser(null);
   };
 
+  const refreshUser = async () => {
+    await loadMe();
+  };
+
   const value = useMemo(
     () => ({
       user,
       loading,
       login,
       logout,
+      refreshUser,
     }),
     [user, loading]
   );

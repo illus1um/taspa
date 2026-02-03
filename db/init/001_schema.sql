@@ -7,6 +7,8 @@ CREATE TABLE IF NOT EXISTS users (
   id BIGSERIAL PRIMARY KEY,
   email TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
+  first_name TEXT,
+  last_name TEXT,
   refresh_token_hash TEXT,
   refresh_token_expires_at TIMESTAMPTZ,
   is_active BOOLEAN NOT NULL DEFAULT TRUE,

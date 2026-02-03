@@ -8,6 +8,7 @@ import { AdminUsersPage } from "../pages/AdminUsersPage";
 import { DeveloperScrapingPage } from "../pages/DeveloperScrapingPage";
 import { LoginPage } from "../pages/LoginPage";
 import { NotFoundPage } from "../pages/NotFoundPage";
+import { ProfilePage } from "../pages/ProfilePage";
 import { UserAnalyticsPage } from "../pages/UserAnalyticsPage";
 
 export const AppRouter = () => {
@@ -19,6 +20,7 @@ export const AppRouter = () => {
           <Route path="/user" element={<Navigate to="/analytics/vk" replace />} />
           <Route path="/analytics" element={<Navigate to="/analytics/vk" replace />} />
           <Route path="/analytics/:platform" element={<UserAnalyticsPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
           <Route
             path="/admin"
             element={

@@ -49,6 +49,8 @@ type UserItem = {
   email: string;
   roles: string[];
   is_active: boolean;
+  first_name?: string | null;
+  last_name?: string | null;
 };
 
 const SectionCard = ({
@@ -122,6 +124,8 @@ const SectionCard = ({
 export const AdminUsersPage = () => {
   const { user: currentUser } = useAuth();
   const [users, setUsers] = useState<UserItem[]>([]);
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [userEmail, setUserEmail] = useState("");
   const [userPassword, setUserPassword] = useState("");
   const [userRole, setUserRole] = useState("user");
@@ -174,8 +178,12 @@ export const AdminUsersPage = () => {
           email: userEmail.trim(),
           password: userPassword,
           role: isDeveloper ? userRole : "user",
+          first_name: firstName.trim() || null,
+          last_name: lastName.trim() || null,
         }),
       });
+      setFirstName("");
+      setLastName("");
       setUserEmail("");
       setUserPassword("");
       setShowUserDialog(false);
@@ -256,7 +264,12 @@ export const AdminUsersPage = () => {
     }
   };
 
-  const getUserInitials = (email: string) => {
+  const getUserInitials = (email: string, firstName?: string | null, lastName?: string | null) => {
+    const first = (firstName || "").trim();
+    const last = (lastName || "").trim();
+    if (first || last) {
+      return `${first.charAt(0)}${last.charAt(0)}`.trim().toUpperCase();
+    }
     return email.charAt(0).toUpperCase();
   };
 
@@ -325,12 +338,15 @@ export const AdminUsersPage = () => {
                           fontSize: "0.9rem",
                         }}
                       >
-                        {getUserInitials(user.email)}
+                        {getUserInitials(user.email, user.first_name, user.last_name)}
                       </Avatar>
                       <Box>
-                        <Typography fontWeight={500}>{user.email}</Typography>
+                        <Typography fontWeight={500}>
+                          {`${user.first_name ?? ""} ${user.last_name ?? ""}`.trim() ||
+                            "—"}
+                        </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          ID: {user.id}
+                          {user.email} · ID: {user.id}
                         </Typography>
                       </Box>
                     </Stack>
@@ -447,6 +463,18 @@ export const AdminUsersPage = () => {
         </DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
+            <TextField
+              label="Имя"
+              value={firstName}
+              onChange={(event) => setFirstName(event.target.value)}
+              fullWidth
+            />
+            <TextField
+              label="Фамилия"
+              value={lastName}
+              onChange={(event) => setLastName(event.target.value)}
+              fullWidth
+            />
             <TextField
               label="Email"
               type="email"

@@ -377,7 +377,7 @@ export const AdminDirectionsPage = () => {
 
       <Grid container spacing={3}>
         {/* Левая колонка - Направления */}
-        <Grid item xs={12} lg={4}>
+        <Grid size={{ xs: 12, lg: 4 }}>
           <SectionCard
             title="Направления"
             icon={<Folder sx={{ color: "#fff", fontSize: 20 }} />}
@@ -477,7 +477,7 @@ export const AdminDirectionsPage = () => {
         </Grid>
 
         {/* Правая колонка - Источники */}
-        <Grid item xs={12} lg={8}>
+        <Grid size={{ xs: 12, lg: 8 }}>
           <SectionCard
             title={
               selectedDirection
@@ -507,7 +507,7 @@ export const AdminDirectionsPage = () => {
               <>
                 {/* Добавление источника */}
                 <Grid container spacing={2} sx={{ mb: 2 }}>
-                  <Grid item xs={12} sm={4}>
+                  <Grid size={{ xs: 12, sm: 4 }}>
                     <FormControl fullWidth size="small">
                       <InputLabel>Тип</InputLabel>
                       <Select
@@ -538,7 +538,7 @@ export const AdminDirectionsPage = () => {
                       </Select>
                     </FormControl>
                   </Grid>
-                  <Grid item xs={12} sm={8}>
+                  <Grid size={{ xs: 12, sm: 8 }}>
                     <Stack direction="row" spacing={1}>
                       <TextField
                         label="Идентификатор"

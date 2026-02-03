@@ -126,13 +126,31 @@ export const MainLayout = () => {
     setAnchorEl(null);
   };
 
+  const handleProfileOpen = () => {
+    handleMenuClose();
+    handleNavigate("/profile");
+  };
+
   const handleLogout = () => {
     handleMenuClose();
     logout();
   };
 
-  const getUserInitials = (email: string) => {
+  const getUserInitials = (email: string, firstName?: string | null, lastName?: string | null) => {
+    const first = (firstName || "").trim();
+    const last = (lastName || "").trim();
+    if (first || last) {
+      return `${first.charAt(0)}${last.charAt(0)}`.trim().toUpperCase();
+    }
     return email.charAt(0).toUpperCase();
+  };
+
+  const getUserLabel = () => {
+    if (!user) return "";
+    const first = user.first_name?.trim();
+    const last = user.last_name?.trim();
+    const full = [first, last].filter(Boolean).join(" ");
+    return full || user.email;
   };
 
   const getRoleBadge = () => {
@@ -156,6 +174,9 @@ export const MainLayout = () => {
     }
     if (location.pathname.startsWith("/admin/users")) {
       return "Пользователи";
+    }
+    if (location.pathname.startsWith("/profile")) {
+      return "Профиль";
     }
     const navMatch = navItems.find((item) => location.pathname.startsWith(item.to));
     return navMatch?.label || "Аналитика";
@@ -382,7 +403,7 @@ export const MainLayout = () => {
               backgroundColor: alpha("#fff", 0.15),
             },
           }}
-          onClick={handleMenuOpen}
+          onClick={handleProfileOpen}
         >
           <Avatar
             sx={{
@@ -393,7 +414,7 @@ export const MainLayout = () => {
               fontWeight: 600,
             }}
           >
-            {user ? getUserInitials(user.email) : "?"}
+                    {user ? getUserInitials(user.email, user.first_name, user.last_name) : "?"}
           </Avatar>
           {(!collapsed || isMobile) && (
             <Box sx={{ flex: 1, overflow: "hidden" }}>
@@ -407,7 +428,7 @@ export const MainLayout = () => {
                   whiteSpace: "nowrap",
                 }}
               >
-                {user?.email}
+                {getUserLabel()}
               </Typography>
               <Typography
                 variant="caption"
@@ -520,7 +541,7 @@ export const MainLayout = () => {
                       fontSize: "0.9rem",
                     }}
                   >
-                    {user ? getUserInitials(user.email) : "?"}
+                    {user ? getUserInitials(user.email, user.first_name, user.last_name) : "?"}
                   </Avatar>
                 </IconButton>
               </Tooltip>
@@ -552,13 +573,13 @@ export const MainLayout = () => {
       >
         <Box sx={{ px: 2, py: 1.5, borderBottom: `1px solid ${colors.grey[100]}` }}>
           <Typography variant="subtitle2" fontWeight={600}>
-            {user?.email}
+            {getUserLabel()}
           </Typography>
           <Typography variant="caption" color="text.secondary">
             {user?.roles.join(", ")}
           </Typography>
         </Box>
-        <MenuItem onClick={handleMenuClose} sx={{ py: 1.25 }}>
+        <MenuItem onClick={handleProfileOpen} sx={{ py: 1.25 }}>
           <ListItemIcon>
             <Person fontSize="small" />
           </ListItemIcon>

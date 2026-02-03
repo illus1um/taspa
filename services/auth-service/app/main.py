@@ -39,6 +39,8 @@ class CreateUserRequest(BaseModel):
     email: EmailStr
     password: str
     role: str
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
 
 
 class ResetPasswordRequest(BaseModel):
@@ -49,11 +51,23 @@ class UpdateRoleRequest(BaseModel):
     role: str
 
 
+class UpdateProfileRequest(BaseModel):
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
 class UserResponse(BaseModel):
     id: int
     email: EmailStr
     roles: List[str]
     is_active: bool
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
 
 
 app = FastAPI(title="TASPA Auth Service")
@@ -124,7 +138,7 @@ def get_current_user(request: Request) -> UserResponse:
         row = conn.execute(
             text(
                 """
-                SELECT id, email, is_active
+                SELECT id, email, is_active, first_name, last_name
                 FROM users
                 WHERE id = :id
                 """
@@ -134,7 +148,14 @@ def get_current_user(request: Request) -> UserResponse:
         if not row:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
         roles = get_user_roles(conn, user_id)
-        return UserResponse(id=row[0], email=row[1], is_active=row[2], roles=roles)
+        return UserResponse(
+            id=row[0],
+            email=row[1],
+            is_active=row[2],
+            roles=roles,
+            first_name=row[3],
+            last_name=row[4],
+        )
 
 
 def get_current_user_optional(request: Request) -> Optional[UserResponse]:
@@ -300,12 +321,17 @@ def create_user(
         result = conn.execute(
             text(
                 """
-                INSERT INTO users (email, password_hash)
-                VALUES (:email, :password_hash)
+                INSERT INTO users (email, password_hash, first_name, last_name)
+                VALUES (:email, :password_hash, :first_name, :last_name)
                 RETURNING id
                 """
             ),
-            {"email": data.email, "password_hash": hash_password(data.password)},
+            {
+                "email": data.email,
+                "password_hash": hash_password(data.password),
+                "first_name": data.first_name,
+                "last_name": data.last_name,
+            },
         )
         user_id = result.fetchone()[0]
         conn.execute(
@@ -318,7 +344,14 @@ def create_user(
             {"user_id": user_id, "role_id": role_row[0]},
         )
 
-        return UserResponse(id=user_id, email=data.email, roles=[data.role], is_active=True)
+        return UserResponse(
+            id=user_id,
+            email=data.email,
+            roles=[data.role],
+            is_active=True,
+            first_name=data.first_name,
+            last_name=data.last_name,
+        )
 
 
 @app.post("/auth/logout")
@@ -346,7 +379,7 @@ def list_users(_: UserResponse = Depends(require_role("admin"))) -> List[UserRes
         rows = conn.execute(
             text(
                 """
-                SELECT id, email, is_active
+                SELECT id, email, is_active, first_name, last_name
                 FROM users
                 ORDER BY id
                 """
@@ -356,7 +389,14 @@ def list_users(_: UserResponse = Depends(require_role("admin"))) -> List[UserRes
         for row in rows:
             roles = get_user_roles(conn, row[0])
             users.append(
-                UserResponse(id=row[0], email=row[1], roles=roles, is_active=row[2])
+                UserResponse(
+                    id=row[0],
+                    email=row[1],
+                    roles=roles,
+                    is_active=row[2],
+                    first_name=row[3],
+                    last_name=row[4],
+                )
             )
     return users
 
@@ -367,7 +407,7 @@ def block_user(
 ) -> UserResponse:
     with engine.begin() as conn:
         target_row = conn.execute(
-            text("SELECT id, email, is_active FROM users WHERE id = :id"),
+            text("SELECT id, email, is_active, first_name, last_name FROM users WHERE id = :id"),
             {"id": user_id},
         ).fetchone()
         if not target_row:
@@ -387,13 +427,20 @@ def block_user(
                 UPDATE users
                 SET is_active = FALSE
                 WHERE id = :id
-                RETURNING id, email, is_active
+                RETURNING id, email, is_active, first_name, last_name
                 """
             ),
             {"id": user_id},
         ).fetchone()
         roles = get_user_roles(conn, row[0])
-    return UserResponse(id=row[0], email=row[1], roles=roles, is_active=row[2])
+    return UserResponse(
+        id=row[0],
+        email=row[1],
+        roles=roles,
+        is_active=row[2],
+        first_name=row[3],
+        last_name=row[4],
+    )
 
 
 @app.post("/auth/users/{user_id}/unblock", response_model=UserResponse)
@@ -422,13 +469,20 @@ def unblock_user(
                 UPDATE users
                 SET is_active = TRUE
                 WHERE id = :id
-                RETURNING id, email, is_active
+                RETURNING id, email, is_active, first_name, last_name
                 """
             ),
             {"id": user_id},
         ).fetchone()
         roles = get_user_roles(conn, row[0])
-    return UserResponse(id=row[0], email=row[1], roles=roles, is_active=row[2])
+    return UserResponse(
+        id=row[0],
+        email=row[1],
+        roles=roles,
+        is_active=row[2],
+        first_name=row[3],
+        last_name=row[4],
+    )
 
 
 @app.put("/auth/users/{user_id}/role", response_model=UserResponse)
@@ -482,11 +536,18 @@ def update_user_role(
         )
 
         row = conn.execute(
-            text("SELECT id, email, is_active FROM users WHERE id = :id"),
+            text("SELECT id, email, is_active, first_name, last_name FROM users WHERE id = :id"),
             {"id": user_id},
         ).fetchone()
         roles = get_user_roles(conn, user_id)
-    return UserResponse(id=row[0], email=row[1], roles=roles, is_active=row[2])
+    return UserResponse(
+        id=row[0],
+        email=row[1],
+        roles=roles,
+        is_active=row[2],
+        first_name=row[3],
+        last_name=row[4],
+    )
 
 
 @app.post("/auth/users/{user_id}/reset-password", response_model=UserResponse)
@@ -519,15 +580,73 @@ def reset_password(
                 UPDATE users
                 SET password_hash = :password_hash
                 WHERE id = :id
-                RETURNING id, email, is_active
+                RETURNING id, email, is_active, first_name, last_name
                 """
             ),
             {"id": user_id, "password_hash": hash_password(data.password)},
         ).fetchone()
         roles = get_user_roles(conn, row[0])
-    return UserResponse(id=row[0], email=row[1], roles=roles, is_active=row[2])
+    return UserResponse(
+        id=row[0],
+        email=row[1],
+        roles=roles,
+        is_active=row[2],
+        first_name=row[3],
+        last_name=row[4],
+    )
 
 
 @app.get("/auth/me", response_model=UserResponse)
 def me(current_user: UserResponse = Depends(get_current_user)) -> UserResponse:
     return current_user
+
+
+@app.put("/auth/me", response_model=UserResponse)
+def update_profile(
+    data: UpdateProfileRequest, current_user: UserResponse = Depends(get_current_user)
+) -> UserResponse:
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                """
+                UPDATE users
+                SET first_name = COALESCE(:first_name, first_name),
+                    last_name = COALESCE(:last_name, last_name)
+                WHERE id = :id
+                """
+            ),
+            {"first_name": data.first_name, "last_name": data.last_name, "id": current_user.id},
+        )
+        row = conn.execute(
+            text("SELECT id, email, is_active, first_name, last_name FROM users WHERE id = :id"),
+            {"id": current_user.id},
+        ).fetchone()
+        roles = get_user_roles(conn, current_user.id)
+    return UserResponse(
+        id=row[0],
+        email=row[1],
+        roles=roles,
+        is_active=row[2],
+        first_name=row[3],
+        last_name=row[4],
+    )
+
+
+@app.post("/auth/me/password")
+def change_password(
+    data: ChangePasswordRequest, current_user: UserResponse = Depends(get_current_user)
+) -> dict:
+    if len(data.new_password) < 8:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Password too short")
+    with engine.begin() as conn:
+        row = conn.execute(
+            text("SELECT password_hash FROM users WHERE id = :id"),
+            {"id": current_user.id},
+        ).fetchone()
+        if not row or not verify_password(data.current_password, row[0]):
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid password")
+        conn.execute(
+            text("UPDATE users SET password_hash = :password_hash WHERE id = :id"),
+            {"password_hash": hash_password(data.new_password), "id": current_user.id},
+        )
+    return {"status": "ok"}
