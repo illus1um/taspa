@@ -12,6 +12,8 @@ import {
   FormControl,
   Grid,
   IconButton,
+  Tabs,
+  Tab,
   InputLabel,
   MenuItem,
   Select,
@@ -37,6 +39,9 @@ import {
   ContentPaste,
   Close,
   CloudUpload,
+  OpenInNew,
+  Edit,
+  Check,
 } from "@mui/icons-material";
 import { useEffect, useState } from "react";
 
@@ -71,15 +76,15 @@ const SectionCard = ({
       overflow: "visible",
       "&::before": headerColor
         ? {
-            content: '""',
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            height: 4,
-            background: headerColor,
-            borderRadius: "12px 12px 0 0",
-          }
+          content: '""',
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 4,
+          background: headerColor,
+          borderRadius: "12px 12px 0 0",
+        }
         : {},
     }}
   >
@@ -191,16 +196,34 @@ const sourceTypeName = (type: Source["source_type"]) => {
   }
 };
 
+const buildSourceUrl = (type: Source["source_type"], identifier: string): string => {
+  switch (type) {
+    case "vk_group":
+      return `https://vk.com/${identifier}`;
+    case "instagram_account":
+      return `https://instagram.com/${identifier}`;
+    case "tiktok_account":
+      return `https://tiktok.com/@${identifier}`;
+  }
+};
+
 export const AdminDirectionsPage = () => {
   const [directions, setDirections] = useState<Direction[]>([]);
   const [selectedDirectionId, setSelectedDirectionId] = useState<number | "">("");
   const [sources, setSources] = useState<Source[]>([]);
 
+  const [activeSourceType, setActiveSourceType] =
+    useState<Source["source_type"]>("vk_group");
   const [directionName, setDirectionName] = useState("");
-  const [sourceType, setSourceType] = useState<Source["source_type"]>("vk_group");
   const [sourceIdentifier, setSourceIdentifier] = useState("");
   const [bulkSources, setBulkSources] = useState("");
   const [showBulkDialog, setShowBulkDialog] = useState(false);
+
+  const [editingDirectionId, setEditingDirectionId] = useState<number | null>(null);
+  const [editingDirectionName, setEditingDirectionName] = useState("");
+
+  const [editSource, setEditSource] = useState<Source | null>(null);
+  const [editSourceIdentifier, setEditSourceIdentifier] = useState("");
 
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -275,6 +298,31 @@ export const AdminDirectionsPage = () => {
     }
   };
 
+  const startEditDirection = (direction: Direction) => {
+    setEditingDirectionId(direction.id);
+    setEditingDirectionName(direction.name);
+  };
+
+  const handleUpdateDirection = async () => {
+    if (!editingDirectionId || !editingDirectionName.trim()) {
+      return;
+    }
+    setError(null);
+    setSuccess(null);
+    try {
+      await apiFetch(`/directions/${editingDirectionId}`, {
+        method: "PUT",
+        body: JSON.stringify({ name: editingDirectionName.trim() }),
+      });
+      await loadDirections();
+      setEditingDirectionId(null);
+      setEditingDirectionName("");
+      setSuccess("Название направления обновлено");
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
+
   const handleAddSource = async () => {
     if (!selectedDirectionId || !sourceIdentifier.trim()) {
       return;
@@ -285,7 +333,7 @@ export const AdminDirectionsPage = () => {
       await apiFetch(`/directions/${selectedDirectionId}/sources`, {
         method: "POST",
         body: JSON.stringify({
-          source_type: sourceType,
+          source_type: activeSourceType,
           source_identifier: sourceIdentifier.trim(),
         }),
       });
@@ -315,7 +363,7 @@ export const AdminDirectionsPage = () => {
         await apiFetch(`/directions/${selectedDirectionId}/sources`, {
           method: "POST",
           body: JSON.stringify({
-            source_type: sourceType,
+            source_type: activeSourceType,
             source_identifier: item,
           }),
         });
@@ -351,6 +399,43 @@ export const AdminDirectionsPage = () => {
   };
 
   const selectedDirection = directions.find((d) => d.id === selectedDirectionId);
+  const filteredSources = sources.filter(
+    (source) => source.source_type === activeSourceType
+  );
+
+  const openEditSourceDialog = (source: Source) => {
+    setEditSource(source);
+    setEditSourceIdentifier(source.source_identifier);
+  };
+
+  const closeEditSourceDialog = () => {
+    setEditSource(null);
+    setEditSourceIdentifier("");
+  };
+
+  const handleUpdateSource = async () => {
+    if (!selectedDirectionId || !editSource || !editSourceIdentifier.trim()) {
+      return;
+    }
+    setError(null);
+    setSuccess(null);
+    try {
+      await apiFetch(
+        `/directions/${selectedDirectionId}/sources/${editSource.id}`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            source_identifier: editSourceIdentifier.trim(),
+          }),
+        }
+      );
+      await loadSources(selectedDirectionId);
+      closeEditSourceDialog();
+      setSuccess("Источник обновлён");
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
 
   return (
     <Stack spacing={3}>
@@ -422,9 +507,8 @@ export const AdminDirectionsPage = () => {
                       bgcolor: isSelected
                         ? alpha(colors.primary.main, 0.1)
                         : "transparent",
-                      border: `1px solid ${
-                        isSelected ? colors.primary.main : "transparent"
-                      }`,
+                      border: `1px solid ${isSelected ? colors.primary.main : "transparent"
+                        }`,
                       "&:hover": {
                         bgcolor: isSelected
                           ? alpha(colors.primary.main, 0.15)
@@ -439,31 +523,96 @@ export const AdminDirectionsPage = () => {
                       ) : (
                         <Folder sx={{ color: colors.grey[400] }} />
                       )}
-                      <Typography
-                        fontWeight={isSelected ? 600 : 400}
-                        color={isSelected ? "primary" : "text.primary"}
-                      >
-                        {direction.name}
-                      </Typography>
+                      {editingDirectionId === direction.id ? (
+                        <TextField
+                          size="small"
+                          value={editingDirectionName}
+                          onChange={(e) => setEditingDirectionName(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleUpdateDirection();
+                            }
+                          }}
+                          autoFocus
+                        />
+                      ) : (
+                        <Typography
+                          fontWeight={isSelected ? 600 : 400}
+                          color={isSelected ? "primary" : "text.primary"}
+                        >
+                          {direction.name}
+                        </Typography>
+                      )}
                     </Stack>
-                    <Tooltip title="Удалить">
-                      <IconButton
-                        size="small"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteDirection(direction.id);
-                        }}
-                        sx={{
-                          opacity: 0.5,
-                          "&:hover": {
-                            opacity: 1,
-                            color: colors.error.main,
-                          },
-                        }}
-                      >
-                        <Delete fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
+                    <Stack direction="row" spacing={0.5}>
+                      {editingDirectionId === direction.id ? (
+                        <>
+                          <Tooltip title="Сохранить">
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleUpdateDirection();
+                              }}
+                            >
+                              <Check fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Отмена">
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingDirectionId(null);
+                                setEditingDirectionName("");
+                              }}
+                            >
+                              <Close fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </>
+                      ) : (
+                        <>
+                          <Tooltip title="Редактировать">
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                startEditDirection(direction);
+                              }}
+                              sx={{
+                                opacity: 0.6,
+                                "&:hover": {
+                                  opacity: 1,
+                                },
+                              }}
+                            >
+                              <Edit fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Удалить">
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteDirection(direction.id);
+                              }}
+                              sx={{
+                                opacity: 0.5,
+                                "&:hover": {
+                                  opacity: 1,
+                                  color: colors.error.main,
+                                },
+                              }}
+                            >
+                              <Delete fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
+                        </>
+                      )}
+                    </Stack>
                   </Box>
                 );
               })}
@@ -505,40 +654,51 @@ export const AdminDirectionsPage = () => {
               </Box>
             ) : (
               <>
+                {/* Переключение соцсетей */}
+                <Box sx={{ mb: 2, borderBottom: 1, borderColor: "divider" }}>
+                  <Tabs
+                    value={activeSourceType}
+                    onChange={(_, value) =>
+                      setActiveSourceType(value as Source["source_type"])
+                    }
+                    variant="fullWidth"
+                  >
+                    <Tab
+                      value="vk_group"
+                      label="VK группы"
+                      icon={
+                        <Box sx={{ display: "flex", alignItems: "center" }}>
+                          <SourceTypeIcon type="vk_group" />
+                        </Box>
+                      }
+                      iconPosition="start"
+                    />
+                    <Tab
+                      value="instagram_account"
+                      label="Instagram аккаунты"
+                      icon={
+                        <Box sx={{ display: "flex", alignItems: "center" }}>
+                          <SourceTypeIcon type="instagram_account" />
+                        </Box>
+                      }
+                      iconPosition="start"
+                    />
+                    <Tab
+                      value="tiktok_account"
+                      label="TikTok аккаунты"
+                      icon={
+                        <Box sx={{ display: "flex", alignItems: "center" }}>
+                          <SourceTypeIcon type="tiktok_account" />
+                        </Box>
+                      }
+                      iconPosition="start"
+                    />
+                  </Tabs>
+                </Box>
+
                 {/* Добавление источника */}
                 <Grid container spacing={2} sx={{ mb: 2 }}>
-                  <Grid size={{ xs: 12, sm: 4 }}>
-                    <FormControl fullWidth size="small">
-                      <InputLabel>Тип</InputLabel>
-                      <Select
-                        label="Тип"
-                        value={sourceType}
-                        onChange={(event) =>
-                          setSourceType(event.target.value as Source["source_type"])
-                        }
-                      >
-                        <MenuItem value="vk_group">
-                          <Stack direction="row" spacing={1} alignItems="center">
-                            <SourceTypeIcon type="vk_group" />
-                            <span>VK группа</span>
-                          </Stack>
-                        </MenuItem>
-                        <MenuItem value="instagram_account">
-                          <Stack direction="row" spacing={1} alignItems="center">
-                            <SourceTypeIcon type="instagram_account" />
-                            <span>Instagram</span>
-                          </Stack>
-                        </MenuItem>
-                        <MenuItem value="tiktok_account">
-                          <Stack direction="row" spacing={1} alignItems="center">
-                            <SourceTypeIcon type="tiktok_account" />
-                            <span>TikTok</span>
-                          </Stack>
-                        </MenuItem>
-                      </Select>
-                    </FormControl>
-                  </Grid>
-                  <Grid size={{ xs: 12, sm: 8 }}>
+                  <Grid size={{ xs: 12 }}>
                     <Stack direction="row" spacing={1}>
                       <TextField
                         label="Идентификатор"
@@ -547,11 +707,11 @@ export const AdminDirectionsPage = () => {
                         fullWidth
                         size="small"
                         placeholder={
-                          sourceType === "vk_group"
+                          activeSourceType === "vk_group"
                             ? "club123456"
-                            : sourceType === "instagram_account"
-                            ? "username"
-                            : "username"
+                            : activeSourceType === "instagram_account"
+                              ? "username"
+                              : "username"
                         }
                         onKeyDown={(e) => e.key === "Enter" && handleAddSource()}
                       />
@@ -577,38 +737,86 @@ export const AdminDirectionsPage = () => {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {sources.map((source) => (
-                        <TableRow key={source.id}>
-                          <TableCell>
-                            <Tooltip title={sourceTypeName(source.source_type)}>
-                              <Box sx={{ display: "inline-flex" }}>
-                                <SourceTypeIcon type={source.source_type} />
-                              </Box>
-                            </Tooltip>
-                          </TableCell>
-                          <TableCell>
-                            <Typography fontWeight={500}>
-                              {source.source_identifier}
-                            </Typography>
-                          </TableCell>
-                          <TableCell align="right">
-                            <Tooltip title="Удалить">
-                              <IconButton
-                                size="small"
-                                color="error"
-                                onClick={() => handleDeleteSource(source.id)}
+                      {filteredSources.map((source) => {
+                        const url = buildSourceUrl(
+                          source.source_type,
+                          source.source_identifier
+                        );
+                        return (
+                          <TableRow key={source.id}>
+                            <TableCell>
+                              <Tooltip title={sourceTypeName(source.source_type)}>
+                                <Box sx={{ display: "inline-flex" }}>
+                                  <SourceTypeIcon type={source.source_type} />
+                                </Box>
+                              </Tooltip>
+                            </TableCell>
+                            <TableCell>
+                              <Stack direction="row" spacing={1} alignItems="center">
+                                <Typography
+                                  component="a"
+                                  href={url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  fontWeight={500}
+                                  sx={{
+                                    textDecoration: "none",
+                                    color: "primary.main",
+                                    "&:hover": {
+                                      textDecoration: "underline",
+                                    },
+                                  }}
+                                >
+                                  {source.source_identifier}
+                                </Typography>
+                                <Tooltip title="Открыть в новой вкладке">
+                                  <IconButton
+                                    size="small"
+                                    component="a"
+                                    href={url}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                  >
+                                    <OpenInNew fontSize="inherit" />
+                                  </IconButton>
+                                </Tooltip>
+                              </Stack>
+                            </TableCell>
+                            <TableCell align="right">
+                              <Stack
+                                direction="row"
+                                spacing={0.5}
+                                justifyContent="flex-end"
                               >
-                                <Delete fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                      {!sources.length && (
+                                <Tooltip title="Редактировать">
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => openEditSourceDialog(source)}
+                                  >
+                                    <Edit fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Удалить">
+                                  <IconButton
+                                    size="small"
+                                    color="error"
+                                    onClick={() => handleDeleteSource(source.id)}
+                                  >
+                                    <Delete fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              </Stack>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                      {!filteredSources.length && (
                         <TableRow>
                           <TableCell colSpan={3}>
                             <Box sx={{ py: 4, textAlign: "center", color: "text.secondary" }}>
-                              <Typography variant="body2">Нет источников</Typography>
+                              <Typography variant="body2">
+                                Нет источников для выбранной соцсети
+                              </Typography>
                             </Box>
                           </TableCell>
                         </TableRow>
@@ -639,20 +847,10 @@ export const AdminDirectionsPage = () => {
         </DialogTitle>
         <DialogContent>
           <Stack spacing={2} sx={{ mt: 1 }}>
-            <FormControl fullWidth>
-              <InputLabel>Тип источников</InputLabel>
-              <Select
-                label="Тип источников"
-                value={sourceType}
-                onChange={(event) =>
-                  setSourceType(event.target.value as Source["source_type"])
-                }
-              >
-                <MenuItem value="vk_group">VK группы</MenuItem>
-                <MenuItem value="instagram_account">Instagram аккаунты</MenuItem>
-                <MenuItem value="tiktok_account">TikTok аккаунты</MenuItem>
-              </Select>
-            </FormControl>
+            <Typography variant="body2">
+              Текущая соцсеть:{" "}
+              <strong>{sourceTypeName(activeSourceType)}</strong>
+            </Typography>
             <TextField
               label="Идентификаторы (по одному на строку)"
               value={bulkSources}
@@ -661,7 +859,7 @@ export const AdminDirectionsPage = () => {
               multiline
               rows={8}
               placeholder={
-                sourceType === "vk_group"
+                activeSourceType === "vk_group"
                   ? "club123456\nclub789012\n..."
                   : "username1\nusername2\n..."
               }
@@ -680,6 +878,39 @@ export const AdminDirectionsPage = () => {
             startIcon={<CloudUpload />}
           >
             Добавить все
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Диалог редактирования источника */}
+      <Dialog open={!!editSource} onClose={closeEditSourceDialog} maxWidth="sm" fullWidth>
+        <DialogTitle>
+          <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Typography variant="h6">Редактирование источника</Typography>
+            <IconButton onClick={closeEditSourceDialog} size="small">
+              <Close />
+            </IconButton>
+          </Stack>
+        </DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            {editSource && (
+              <Typography variant="body2" color="text.secondary">
+                Тип: <strong>{sourceTypeName(editSource.source_type)}</strong>
+              </Typography>
+            )}
+            <TextField
+              label="Идентификатор"
+              value={editSourceIdentifier}
+              onChange={(e) => setEditSourceIdentifier(e.target.value)}
+              fullWidth
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={closeEditSourceDialog}>Отмена</Button>
+          <Button variant="contained" onClick={handleUpdateSource}>
+            Сохранить
           </Button>
         </DialogActions>
       </Dialog>

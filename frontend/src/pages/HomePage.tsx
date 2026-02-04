@@ -10,16 +10,14 @@ import {
   alpha,
 } from "@mui/material";
 import {
-  Analytics,
   Assignment,
-  Groups,
   Memory,
   Person,
   Shield,
-  TrendingUp,
 } from "@mui/icons-material";
+import { BarChart, Users, ShieldAlert, Instagram  } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-
+import { ChartLine } from 'lucide-react';
 import { useAuth } from "../auth/AuthContext";
 import { hasRole } from "../auth/role";
 import { colors } from "../theme";
@@ -159,7 +157,7 @@ export const HomePage = () => {
     {
       title: "VK Аналитика",
       description: "Просмотр данных ВКонтакте групп и участников",
-      icon: <Analytics sx={{ color: "#fff", fontSize: 28 }} />,
+      icon: <Typography sx={{ color: "#fff", fontSize: 20, fontWeight: 700 }}>VK</Typography>,
       gradient: `linear-gradient(135deg, #5181b8 0%, #3b5998 100%)`,
       onClick: () => navigate("/analytics/vk"),
       show: true,
@@ -167,7 +165,7 @@ export const HomePage = () => {
     {
       title: "Instagram Аналитика",
       description: "Анализ Instagram аккаунтов по регионам",
-      icon: <TrendingUp sx={{ color: "#fff", fontSize: 28 }} />,
+      icon: <Instagram size={28} color="#fff" />,
       gradient: `linear-gradient(135deg, #f09433 0%, #e6683c 50%, #dc2743 100%)`,
       onClick: () => navigate("/analytics/instagram"),
       show: true,
@@ -175,7 +173,7 @@ export const HomePage = () => {
     {
       title: "TikTok Аналитика",
       description: "Мониторинг TikTok аккаунтов и подписчиков",
-      icon: <TrendingUp sx={{ color: "#fff", fontSize: 28 }} />,
+      icon: <BarChart size={28} color="#fff" />,
       gradient: `linear-gradient(135deg, #25f4ee 0%, #fe2c55 100%)`,
       onClick: () => navigate("/analytics/tiktok"),
       show: true,
@@ -191,7 +189,7 @@ export const HomePage = () => {
     {
       title: "Пользователи",
       description: "Управление пользователями системы",
-      icon: <Groups sx={{ color: "#fff", fontSize: 28 }} />,
+      icon: <Users size={28} color="#fff" />,
       gradient: `linear-gradient(135deg, ${colors.secondary.main} 0%, ${colors.secondary.dark} 100%)`,
       onClick: () => navigate("/admin/users"),
       show: isAdmin,
@@ -307,7 +305,7 @@ export const HomePage = () => {
           <StatCard
             label="VK групп"
             value="—"
-            icon={<Groups sx={{ color: colors.info.main, fontSize: 24 }} />}
+            icon={<Users size={24} color={colors.info.main} />}
             color={colors.info.main}
           />
           <StatCard
@@ -370,14 +368,14 @@ export const HomePage = () => {
                 flexShrink: 0,
               }}
             >
-              <Analytics sx={{ color: colors.info.main }} />
+              <ShieldAlert size={24} color={colors.info.main} />
             </Box>
             <Box>
               <Typography variant="subtitle1" fontWeight={600} gutterBottom>
                 О платформе ТАСПА
               </Typography>
               <Typography variant="body2" color="text.secondary">
-              Программный комплекс «ТАСПА» предназначен для мониторинга социальных сетей, анализа деятельности религиозных течений, выявления взаимосвязей, тенденций, источников пропаганды
+                Программный комплекс «ТАСПА» предназначен для мониторинга социальных сетей, анализа деятельности религиозных течений, выявления взаимосвязей, тенденций, источников пропаганды
               </Typography>
             </Box>
           </Stack>

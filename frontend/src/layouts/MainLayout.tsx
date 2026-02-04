@@ -23,7 +23,6 @@ import {
   Badge,
 } from "@mui/material";
 import {
-  Dashboard,
   AdminPanelSettings,
   Code,
   Logout,
@@ -33,9 +32,8 @@ import {
   Notifications,
   Settings,
   ExpandMore,
-  People,
-  Home,
 } from "@mui/icons-material";
+import { Home, Users, ChartLine } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 import { useAuth } from "../auth/AuthContext";
@@ -58,7 +56,7 @@ export const MainLayout = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  
+
   const [mobileOpen, setMobileOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -68,7 +66,7 @@ export const MainLayout = () => {
     {
       label: "Главная",
       to: "/home",
-      icon: <Home />,
+      icon: <Home size={20} />,
       show: true,
     },
     {
@@ -80,7 +78,7 @@ export const MainLayout = () => {
     {
       label: "Пользователи",
       to: "/admin/users",
-      icon: <People />,
+      icon: <Users size={20} />,
       show: user ? hasRole(user.roles, "admin") : false,
     },
     {
@@ -334,7 +332,7 @@ export const MainLayout = () => {
                 color: isAnalyticsActive ? "#fff" : alpha("#fff", 0.7),
               }}
             >
-              <Dashboard />
+              <ChartLine size={20} />
             </ListItemIcon>
             {(!collapsed || isMobile) && (
               <>
@@ -478,7 +476,7 @@ export const MainLayout = () => {
               fontWeight: 600,
             }}
           >
-                    {user ? getUserInitials(user.email, user.first_name, user.last_name) : "?"}
+            {user ? getUserInitials(user.email, user.first_name, user.last_name) : "?"}
           </Avatar>
           {(!collapsed || isMobile) && (
             <Box sx={{ flex: 1, overflow: "hidden" }}>

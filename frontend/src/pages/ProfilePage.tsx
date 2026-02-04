@@ -210,8 +210,8 @@ export const ProfilePage = () => {
                         role === "developer"
                           ? "Разработчик"
                           : role === "admin"
-                          ? "Админ"
-                          : "Пользователь"
+                            ? "Админ"
+                            : "Пользователь"
                       }
                       size="small"
                       sx={{
@@ -219,16 +219,16 @@ export const ProfilePage = () => {
                           role === "developer"
                             ? colors.warning.main
                             : role === "admin"
-                            ? colors.error.main
-                            : colors.primary.main,
+                              ? colors.error.main
+                              : colors.primary.main,
                           0.1
                         ),
                         color:
                           role === "developer"
                             ? colors.warning.dark
                             : role === "admin"
-                            ? colors.error.dark
-                            : colors.primary.dark,
+                              ? colors.error.dark
+                              : colors.primary.dark,
                         fontWeight: 500,
                       }}
                     />

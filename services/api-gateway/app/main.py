@@ -237,8 +237,14 @@ async def scrape_import_vk_csv(request: Request) -> Response:
 
     form_data = await request.form()
     url = f"{SCRAPING_SERVICE_URL.rstrip('/')}/scrape/import/vk-csv"
+    # Пробрасываем query-параметры (в т.ч. direction_id) в оркестратор
     async with httpx.AsyncClient() as client:
-        resp = await client.post(url, data=form_data, headers=headers)
+        resp = await client.post(
+            url,
+            params=request.query_params,
+            data=form_data,
+            headers=headers,
+        )
     response_headers = _filter_headers(resp.headers.items())
     return Response(content=resp.content, status_code=resp.status_code, headers=response_headers)
 

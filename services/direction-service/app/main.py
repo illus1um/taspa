@@ -32,6 +32,10 @@ class SourceCreate(BaseModel):
     source_identifier: str
 
 
+class SourceUpdate(BaseModel):
+    source_identifier: str
+
+
 class SourceResponse(BaseModel):
     id: int
     direction_id: int
@@ -226,6 +230,68 @@ def add_source(
         id=source_id,
         direction_id=direction_id,
         source_type=data.source_type,
+        source_identifier=data.source_identifier,
+    )
+
+
+@app.put("/directions/{direction_id}/sources/{source_id}", response_model=SourceResponse)
+def update_source(
+    direction_id: int,
+    source_id: int,
+    data: SourceUpdate,
+    _: List[str] = Depends(require_admin),
+) -> SourceResponse:
+    with engine.begin() as conn:
+        existing_row = conn.execute(
+            text(
+                """
+                SELECT id, direction_id, source_type, source_identifier
+                FROM direction_sources
+                WHERE id = :source_id AND direction_id = :direction_id
+                """
+            ),
+            {"source_id": source_id, "direction_id": direction_id},
+        ).fetchone()
+        if not existing_row:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+        # Проверка уникальности (учитывая ограничение UNIQUE (direction_id, source_type, source_identifier))
+        duplicate = conn.execute(
+            text(
+                """
+                SELECT id
+                FROM direction_sources
+                WHERE direction_id = :direction_id
+                  AND source_type = :source_type
+                  AND source_identifier = :source_identifier
+                  AND id <> :source_id
+                """
+            ),
+            {
+                "direction_id": direction_id,
+                "source_type": existing_row[2],
+                "source_identifier": data.source_identifier,
+                "source_id": source_id,
+            },
+        ).fetchone()
+        if duplicate:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Source exists")
+
+        conn.execute(
+            text(
+                """
+                UPDATE direction_sources
+                SET source_identifier = :source_identifier
+                WHERE id = :id
+                """
+            ),
+            {"source_identifier": data.source_identifier, "id": source_id},
+        )
+
+    return SourceResponse(
+        id=source_id,
+        direction_id=direction_id,
+        source_type=existing_row[2],
         source_identifier=data.source_identifier,
     )
 

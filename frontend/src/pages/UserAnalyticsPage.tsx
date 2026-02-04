@@ -27,20 +27,18 @@ import {
   Tooltip,
 } from "@mui/material";
 import {
-  People,
-  Groups,
+  Users,
   TrendingUp,
-  Male,
-  Female,
-  School,
-  AccountBalance,
+  User,
+  GraduationCap,
+  Landmark,
   Search,
   Download,
   Instagram,
-  Refresh,
-  OpenInNew,
-  FilterList,
-} from "@mui/icons-material";
+  RefreshCcw,
+  ExternalLink,
+  Filter,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
@@ -431,7 +429,7 @@ export const UserAnalyticsPage = () => {
               <StatCard
                 title="Всего подписчиков"
                 value={summary?.total_members?.toLocaleString() ?? "—"}
-                icon={<People sx={{ color: "#fff", fontSize: 24 }} />}
+                icon={<Users size={24} color="#fff" />}
                 gradient={`linear-gradient(135deg, ${colors.primary.main} 0%, ${colors.primary.dark} 100%)`}
                 loading={loadingData}
               />
@@ -440,7 +438,7 @@ export const UserAnalyticsPage = () => {
               <StatCard
                 title="Групп в направлении"
                 value={summary?.group_count ?? "—"}
-                icon={<Groups sx={{ color: "#fff", fontSize: 24 }} />}
+                icon={<Users size={24} color="#fff" />}
                 gradient={`linear-gradient(135deg, ${colors.secondary.main} 0%, ${colors.secondary.dark} 100%)`}
                 loading={loadingData}
               />
@@ -449,7 +447,7 @@ export const UserAnalyticsPage = () => {
               <StatCard
                 title="ВУЗов"
                 value={universities.length}
-                icon={<AccountBalance sx={{ color: "#fff", fontSize: 24 }} />}
+                icon={<Landmark size={24} color="#fff" />}
                 gradient={`linear-gradient(135deg, ${colors.info.main} 0%, ${colors.info.dark} 100%)`}
                 loading={loadingData}
               />
@@ -458,7 +456,7 @@ export const UserAnalyticsPage = () => {
               <StatCard
                 title="Школ"
                 value={schools.length}
-                icon={<School sx={{ color: "#fff", fontSize: 24 }} />}
+                icon={<GraduationCap size={24} color="#fff" />}
                 gradient={`linear-gradient(135deg, ${colors.success.main} 0%, ${colors.success.dark} 100%)`}
                 loading={loadingData}
               />
@@ -470,7 +468,7 @@ export const UserAnalyticsPage = () => {
             <Grid item xs={12} lg={6}>
               <SectionCard
                 title="Распределение по полу"
-                icon={<TrendingUp />}
+                icon={<TrendingUp size={24} />}
               >
                 <Box sx={{ height: 280 }}>
                   {loadingData ? (
@@ -515,7 +513,7 @@ export const UserAnalyticsPage = () => {
             <Grid item xs={12} lg={6}>
               <SectionCard
                 title="Временная динамика"
-                icon={<TrendingUp />}
+                icon={<TrendingUp size={24} />}
               >
                 <Box sx={{ height: 280 }}>
                   {loadingData ? (
@@ -562,7 +560,7 @@ export const UserAnalyticsPage = () => {
           {/* Таблицы ВУЗов и школ */}
           <Grid container spacing={3}>
             <Grid item xs={12} lg={6}>
-              <SectionCard title="ВУЗы" icon={<AccountBalance />}>
+              <SectionCard title="ВУЗы" icon={<Landmark size={24} />}>
                 <TableContainer sx={{ maxHeight: 300 }}>
                   <Table size="small" stickyHeader>
                     <TableHead>
@@ -598,7 +596,7 @@ export const UserAnalyticsPage = () => {
               </SectionCard>
             </Grid>
             <Grid item xs={12} lg={6}>
-              <SectionCard title="Школы" icon={<School />}>
+              <SectionCard title="Школы" icon={<GraduationCap size={24} />}>
                 <TableContainer sx={{ maxHeight: 300 }}>
                   <Table size="small" stickyHeader>
                     <TableHead>
@@ -636,7 +634,7 @@ export const UserAnalyticsPage = () => {
           </Grid>
 
           {/* Поиск */}
-          <SectionCard title="Поиск участников" icon={<Search />}>
+          <SectionCard title="Поиск участников" icon={<Search size={24} />}>
             <Stack
               spacing={2}
               direction={{ xs: "column", md: "row" }}
@@ -652,7 +650,7 @@ export const UserAnalyticsPage = () => {
                 InputProps={{
                   startAdornment: (
                     <InputAdornment position="start">
-                      <Search sx={{ color: colors.grey[400] }} />
+                      <Search size={20} color={colors.grey[400]} />
                     </InputAdornment>
                   ),
                 }}
@@ -695,9 +693,9 @@ export const UserAnalyticsPage = () => {
                       <TableCell>{item.full_name || "—"}</TableCell>
                       <TableCell>
                         {item.gender === "male" ? (
-                          <Chip size="small" icon={<Male />} label="М" color="info" />
+                          <Chip size="small" icon={<User size={16} />} label="М" color="info" />
                         ) : item.gender === "female" ? (
-                          <Chip size="small" icon={<Female />} label="Ж" color="secondary" />
+                          <Chip size="small" icon={<User size={16} />} label="Ж" color="secondary" />
                         ) : (
                           "—"
                         )}
@@ -719,7 +717,7 @@ export const UserAnalyticsPage = () => {
           </SectionCard>
 
           {/* Группы VK */}
-          <SectionCard title="Группы ВКонтакте" icon={<Groups />}>
+          <SectionCard title="Группы ВКонтакте" icon={<Users size={24} />}>
             <TableContainer sx={{ maxHeight: 400 }}>
               <Table size="small" stickyHeader>
                 <TableHead>
@@ -754,18 +752,18 @@ export const UserAnalyticsPage = () => {
           </SectionCard>
 
           {/* Экспорт */}
-          <SectionCard title="Экспорт данных" icon={<Download />}>
+          <SectionCard title="Экспорт данных" icon={<Download size={24} />}>
             <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
               <Button
                 variant="outlined"
-                startIcon={<Download />}
+                startIcon={<Download size={20} />}
                 onClick={() => handleExport("vk_members", "xlsx")}
               >
                 Участники (XLSX)
               </Button>
               <Button
                 variant="outlined"
-                startIcon={<Download />}
+                startIcon={<Download size={20} />}
                 onClick={() => handleExport("vk_members", "pdf")}
               >
                 Участники (PDF)
@@ -793,7 +791,7 @@ export const UserAnalyticsPage = () => {
               <StatCard
                 title="Аккаунтов"
                 value={instagramAccounts.length}
-                icon={<Instagram sx={{ color: "#fff", fontSize: 24 }} />}
+                icon={<Instagram size={24} color="#fff" />}
                 gradient="linear-gradient(135deg, #f09433 0%, #dc2743 100%)"
                 loading={loadingData}
               />
@@ -802,7 +800,7 @@ export const UserAnalyticsPage = () => {
               <StatCard
                 title="Пользователей"
                 value={instagramUsers.length}
-                icon={<People sx={{ color: "#fff", fontSize: 24 }} />}
+                icon={<Users size={24} color="#fff" />}
                 gradient="linear-gradient(135deg, #bc1888 0%, #cc2366 100%)"
                 loading={loadingData}
               />
@@ -811,7 +809,7 @@ export const UserAnalyticsPage = () => {
 
           <Grid container spacing={3}>
             <Grid item xs={12} lg={6}>
-              <SectionCard title="Аккаунты" icon={<Instagram />}>
+              <SectionCard title="Аккаунты" icon={<Instagram size={24} />}>
                 <TableContainer sx={{ maxHeight: 400 }}>
                   <Table size="small" stickyHeader>
                     <TableHead>
@@ -836,7 +834,7 @@ export const UserAnalyticsPage = () => {
                                   href={item.url}
                                   target="_blank"
                                 >
-                                  <OpenInNew fontSize="small" />
+                                  <ExternalLink size={16} />
                                 </IconButton>
                               </Tooltip>
                             )}
@@ -856,7 +854,7 @@ export const UserAnalyticsPage = () => {
               </SectionCard>
             </Grid>
             <Grid item xs={12} lg={6}>
-              <SectionCard title="Пользователи" icon={<People />}>
+              <SectionCard title="Пользователи" icon={<Users size={24} />}>
                 <TableContainer sx={{ maxHeight: 400 }}>
                   <Table size="small" stickyHeader>
                     <TableHead>
@@ -888,18 +886,18 @@ export const UserAnalyticsPage = () => {
             </Grid>
           </Grid>
 
-          <SectionCard title="Экспорт данных" icon={<Download />}>
+          <SectionCard title="Экспорт данных" icon={<Download size={24} />}>
             <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
               <Button
                 variant="outlined"
-                startIcon={<Download />}
+                startIcon={<Download size={20} />}
                 onClick={() => handleExport("instagram_users", "xlsx")}
               >
                 Пользователи (XLSX)
               </Button>
               <Button
                 variant="outlined"
-                startIcon={<Download />}
+                startIcon={<Download size={20} />}
                 onClick={() => handleExport("instagram_users", "pdf")}
               >
                 Пользователи (PDF)
@@ -951,7 +949,7 @@ export const UserAnalyticsPage = () => {
               <StatCard
                 title="Пользователей"
                 value={tiktokUsers.length}
-                icon={<People sx={{ color: "#fff", fontSize: 24 }} />}
+                icon={<Users size={24} color="#fff" />}
                 gradient="linear-gradient(135deg, #25F4EE 0%, #FE2C55 100%)"
                 loading={loadingData}
               />
@@ -1018,7 +1016,7 @@ export const UserAnalyticsPage = () => {
               </SectionCard>
             </Grid>
             <Grid item xs={12} lg={6}>
-              <SectionCard title="Пользователи" icon={<People />}>
+              <SectionCard title="Пользователи" icon={<Users size={24} />}>
                 <TableContainer sx={{ maxHeight: 400 }}>
                   <Table size="small" stickyHeader>
                     <TableHead>
@@ -1057,18 +1055,18 @@ export const UserAnalyticsPage = () => {
             </Grid>
           </Grid>
 
-          <SectionCard title="Экспорт данных" icon={<Download />}>
+          <SectionCard title="Экспорт данных" icon={<Download size={24} />}>
             <Stack direction="row" spacing={2} flexWrap="wrap" useFlexGap>
               <Button
                 variant="outlined"
-                startIcon={<Download />}
+                startIcon={<Download size={20} />}
                 onClick={() => handleExport("tiktok_users", "xlsx")}
               >
                 Пользователи (XLSX)
               </Button>
               <Button
                 variant="outlined"
-                startIcon={<Download />}
+                startIcon={<Download size={20} />}
                 onClick={() => handleExport("tiktok_users", "pdf")}
               >
                 Пользователи (PDF)
