@@ -1,10 +1,12 @@
+import csv
+import io
 import json
 import os
 from datetime import datetime
 from typing import Dict, List, Optional
 
 import pika
-from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy import create_engine, text
 
@@ -241,3 +243,201 @@ def stop_job(job_id: int, _: List[str] = Depends(require_developer)) -> dict:
         if result.rowcount == 0:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     return {"status": "stopped"}
+
+
+class ImportVkCsvResponse(BaseModel):
+    direction_id: int
+    vk_group_id: str
+    members_imported: int
+    members_updated: int
+    errors: List[str]
+
+
+@app.post("/scrape/import/vk-csv", response_model=ImportVkCsvResponse)
+async def import_vk_csv(
+    direction_id: int,
+    file: UploadFile = File(...),
+    _: List[str] = Depends(require_developer),
+) -> ImportVkCsvResponse:
+    # Проверка направления
+    with engine.connect() as conn:
+        dir_row = conn.execute(
+            text("SELECT id FROM directions WHERE id = :id"), {"id": direction_id}
+        ).fetchone()
+        if not dir_row:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Direction not found"
+            )
+
+    # Чтение CSV
+    try:
+        content = await file.read()
+        text_content = content.decode("utf-8-sig")  # UTF-8 с BOM
+        csv_reader = csv.DictReader(io.StringIO(text_content))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid CSV file: {str(e)}"
+        )
+
+    members_imported = 0
+    members_updated = 0
+    errors = []
+    vk_group_id = None
+    scraped_at = datetime.utcnow()
+
+    # Обработка строк CSV
+    with engine.begin() as conn:
+        for idx, row in enumerate(csv_reader, start=2):  # start=2 т.к. первая строка - заголовок
+            try:
+                # Извлечение данных
+                vk_user_id = str(row.get("VK_ID", "")).strip()
+                first_name = str(row.get("Имя", "")).strip()
+                last_name = str(row.get("Фамилия", "")).strip()
+                gender_raw = str(row.get("Пол", "")).strip()
+                group_id = str(row.get("Группа", "")).strip()
+
+                if not vk_user_id:
+                    errors.append(f"Строка {idx}: отсутствует VK_ID")
+                    continue
+
+                if not group_id:
+                    errors.append(f"Строка {idx}: отсутствует Группа")
+                    continue
+
+                # Сохранение vk_group_id для ответа
+                if vk_group_id is None:
+                    vk_group_id = group_id
+
+                # Создание или получение группы VK
+                group_row = conn.execute(
+                    text(
+                        """
+                        SELECT id FROM vk_groups
+                        WHERE direction_id = :direction_id AND vk_group_id = :vk_group_id
+                        """
+                    ),
+                    {"direction_id": direction_id, "vk_group_id": group_id},
+                ).fetchone()
+
+                if not group_row:
+                    # Создание группы
+                    result = conn.execute(
+                        text(
+                            """
+                            INSERT INTO vk_groups (direction_id, vk_group_id, scraped_at)
+                            VALUES (:direction_id, :vk_group_id, :scraped_at)
+                            RETURNING id
+                            """
+                        ),
+                        {
+                            "direction_id": direction_id,
+                            "vk_group_id": group_id,
+                            "scraped_at": scraped_at,
+                        },
+                    )
+                    vk_group_db_id = result.fetchone()[0]
+                else:
+                    vk_group_db_id = group_row[0]
+                    # Обновление scraped_at
+                    conn.execute(
+                        text(
+                            """
+                            UPDATE vk_groups
+                            SET scraped_at = :scraped_at
+                            WHERE id = :id
+                            """
+                        ),
+                        {"scraped_at": scraped_at, "id": vk_group_db_id},
+                    )
+
+                # Формирование full_name
+                full_name_parts = [first_name, last_name]
+                full_name = " ".join([p for p in full_name_parts if p]).strip() or None
+
+                # Конвертация пола
+                gender = None
+                if gender_raw:
+                    gender_lower = gender_raw.lower()
+                    if gender_lower in ["м", "m", "male", "мужской"]:
+                        gender = "male"
+                    elif gender_lower in ["ж", "f", "female", "женский"]:
+                        gender = "female"
+
+                # Проверка существования участника
+                existing = conn.execute(
+                    text(
+                        """
+                        SELECT id FROM vk_members
+                        WHERE vk_group_id = :vk_group_id AND vk_user_id = :vk_user_id
+                        """
+                    ),
+                    {"vk_group_id": vk_group_db_id, "vk_user_id": vk_user_id},
+                ).fetchone()
+
+                if existing:
+                    # Обновление существующего
+                    conn.execute(
+                        text(
+                            """
+                            UPDATE vk_members
+                            SET full_name = :full_name,
+                                gender = :gender,
+                                scraped_at = :scraped_at
+                            WHERE id = :id
+                            """
+                        ),
+                        {
+                            "full_name": full_name,
+                            "gender": gender,
+                            "scraped_at": scraped_at,
+                            "id": existing[0],
+                        },
+                    )
+                    members_updated += 1
+                else:
+                    # Вставка нового
+                    conn.execute(
+                        text(
+                            """
+                            INSERT INTO vk_members (
+                                vk_group_id, vk_user_id, full_name, gender, scraped_at
+                            )
+                            VALUES (:vk_group_id, :vk_user_id, :full_name, :gender, :scraped_at)
+                            """
+                        ),
+                        {
+                            "vk_group_id": vk_group_db_id,
+                            "vk_user_id": vk_user_id,
+                            "full_name": full_name,
+                            "gender": gender,
+                            "scraped_at": scraped_at,
+                        },
+                    )
+                    members_imported += 1
+
+            except Exception as e:
+                errors.append(f"Строка {idx}: {str(e)}")
+                continue
+
+        # Обновление members_count группы
+        if vk_group_id:
+            conn.execute(
+                text(
+                    """
+                    UPDATE vk_groups
+                    SET members_count = (
+                        SELECT COUNT(*) FROM vk_members WHERE vk_group_id = vk_groups.id
+                    )
+                    WHERE direction_id = :direction_id AND vk_group_id = :vk_group_id
+                    """
+                ),
+                {"direction_id": direction_id, "vk_group_id": vk_group_id},
+            )
+
+    return ImportVkCsvResponse(
+        direction_id=direction_id,
+        vk_group_id=vk_group_id or "",
+        members_imported=members_imported,
+        members_updated=members_updated,
+        errors=errors[:50],  # Ограничиваем количество ошибок
+    )

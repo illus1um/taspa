@@ -232,6 +232,17 @@ export const MainLayout = () => {
                 width: "auto",
               }}
             />
+            <Typography
+              sx={{
+                ml: 1.5,
+                fontWeight: 700,
+                letterSpacing: "0.12em",
+                color: "#fff",
+                fontSize: "1rem",
+              }}
+            >
+              TASPA
+            </Typography>
           </Box>
         )}
         {!isMobile && (

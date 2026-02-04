@@ -221,6 +221,28 @@ async def scrape_config_update(
     return Response(content=resp.content, status_code=resp.status_code, headers=response_headers)
 
 
+@app.post("/scrape/import/vk-csv")
+async def scrape_import_vk_csv(request: Request) -> Response:
+    if not SCRAPING_SERVICE_URL:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Scraping service not configured",
+        )
+    user_meta = _require_jwt(request)
+    headers = _filter_headers(request.headers.items())
+    headers.pop("host", None)
+    headers.pop("content-type", None)  # Удаляем, чтобы httpx установил правильный для multipart
+    headers["X-User-Id"] = user_meta["user_id"]
+    headers["X-Roles"] = user_meta["roles"]
+
+    form_data = await request.form()
+    url = f"{SCRAPING_SERVICE_URL.rstrip('/')}/scrape/import/vk-csv"
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(url, data=form_data, headers=headers)
+    response_headers = _filter_headers(resp.headers.items())
+    return Response(content=resp.content, status_code=resp.status_code, headers=response_headers)
+
+
 @app.api_route("/{service}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
 @app.api_route("/{service}/{path:path}", methods=["GET", "POST", "PUT", "PATCH", "DELETE"])
 async def proxy(service: str, request: Request, path: str = "") -> Response:

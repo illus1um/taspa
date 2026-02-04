@@ -53,6 +53,8 @@ import {
   Error,
   HourglassEmpty,
   Cancel,
+  Upload,
+  FileUpload,
 } from "@mui/icons-material";
 import { useEffect, useMemo, useState } from "react";
 import { io } from "socket.io-client";
@@ -226,6 +228,9 @@ export const DeveloperScrapingPage = () => {
   const [showApiKey, setShowApiKey] = useState(false);
   const [rpm, setRpm] = useState("");
   const [concurrency, setConcurrency] = useState("");
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importDirectionId, setImportDirectionId] = useState<number | "">("");
+  const [importing, setImporting] = useState(false);
 
   useEffect(() => {
     const init = async () => {
@@ -332,6 +337,52 @@ export const DeveloperScrapingPage = () => {
       setShowConfigDialog(false);
     } catch (err) {
       setError((err as Error).message);
+    }
+  };
+
+  const handleImportCsv = async () => {
+    if (!importFile || !importDirectionId) {
+      setError("Выберите файл и направление");
+      return;
+    }
+    setError(null);
+    setSuccess(null);
+    setImporting(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", importFile);
+
+      const token = getToken();
+      const apiBase = import.meta.env.VITE_API_BASE || "/api";
+      const response = await fetch(
+        `${apiBase}/scrape/import/vk-csv?direction_id=${importDirectionId}`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          credentials: "include",
+          body: formData,
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: "Ошибка импорта" }));
+        throw new Error(errorData.detail || "Ошибка импорта");
+      }
+
+      const result = await response.json();
+      const errorCount = result.errors?.length || 0;
+      const successMsg = `Импортировано: ${result.members_imported}, обновлено: ${result.members_updated}${
+        errorCount > 0 ? `. Ошибок: ${errorCount}` : ""
+      }`;
+      setSuccess(successMsg);
+      setImportFile(null);
+      await loadJobs();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setImporting(false);
     }
   };
 
@@ -590,6 +641,84 @@ export const DeveloperScrapingPage = () => {
             >
               Настройки скраперов
             </Button>
+          </SectionCard>
+
+          {/* Импорт CSV */}
+          <SectionCard
+            title="Импорт данных"
+            icon={<FileUpload sx={{ color: "#fff", fontSize: 20 }} />}
+            headerColor={`linear-gradient(135deg, ${colors.info.main} 0%, ${colors.info.dark} 100%)`}
+          >
+            <Stack spacing={2}>
+              <FormControl fullWidth>
+                <InputLabel>Направление</InputLabel>
+                <Select
+                  label="Направление"
+                  value={importDirectionId}
+                  onChange={(event) => setImportDirectionId(Number(event.target.value))}
+                >
+                  {directions.map((direction) => (
+                    <MenuItem key={direction.id} value={direction.id}>
+                      {direction.name}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+
+              <Box
+                sx={{
+                  border: `2px dashed ${colors.grey[300]}`,
+                  borderRadius: 2,
+                  p: 3,
+                  textAlign: "center",
+                  bgcolor: importFile ? alpha(colors.info.main, 0.05) : colors.grey[50],
+                  transition: "all 0.2s",
+                  "&:hover": {
+                    borderColor: colors.info.main,
+                    bgcolor: alpha(colors.info.main, 0.05),
+                  },
+                }}
+              >
+                <input
+                  accept=".csv"
+                  style={{ display: "none" }}
+                  id="csv-upload"
+                  type="file"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setImportFile(file);
+                    }
+                  }}
+                />
+                <label htmlFor="csv-upload">
+                  <Stack spacing={1} alignItems="center" sx={{ cursor: "pointer" }}>
+                    <Upload sx={{ fontSize: 40, color: colors.info.main }} />
+                    <Typography variant="body2" fontWeight={500}>
+                      {importFile ? importFile.name : "Выберите CSV файл"}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      Формат: VK_ID, Ссылка, Имя, Фамилия, Пол, Возраст, Дата рождения, Страна, Город, Группа, Последний визит
+                    </Typography>
+                  </Stack>
+                </label>
+              </Box>
+
+              <Button
+                variant="contained"
+                fullWidth
+                size="large"
+                startIcon={<Upload />}
+                onClick={handleImportCsv}
+                disabled={!importFile || !importDirectionId || importing}
+                sx={{
+                  py: 1.5,
+                  background: `linear-gradient(135deg, ${colors.info.main} 0%, ${colors.info.dark} 100%)`,
+                }}
+              >
+                {importing ? "Импорт..." : "Импортировать CSV"}
+              </Button>
+            </Stack>
           </SectionCard>
         </Grid>
 
