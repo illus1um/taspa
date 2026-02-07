@@ -217,6 +217,9 @@ export const LoginPage = () => {
                     backgroundColor: "#fff",
                   },
                 },
+                "& .MuiInputBase-input": {
+                  paddingLeft: 1,
+                },
               }}
             />
             <TextField
@@ -257,6 +260,9 @@ export const LoginPage = () => {
                   "&.Mui-focused": {
                     backgroundColor: "#fff",
                   },
+                },
+                "& .MuiInputBase-input": {
+                  paddingLeft: 1,
                 },
               }}
             />

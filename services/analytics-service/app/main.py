@@ -42,8 +42,15 @@ class VkMemberItem(BaseModel):
     vk_user_id: str
     full_name: Optional[str]
     gender: Optional[str]
+    age: Optional[int]
+    city: Optional[str]
     university: Optional[str]
     school: Optional[str]
+
+
+class DistributionItem(BaseModel):
+    label: str
+    count: int
 
 
 class VkMemberSearchResponse(BaseModel):
@@ -232,7 +239,7 @@ def vk_search(
         rows = conn.execute(
             text(
                 """
-                SELECT m.vk_user_id, m.full_name, m.gender, m.university, m.school
+                SELECT m.vk_user_id, m.full_name, m.gender, m.age, m.city, m.university, m.school
                 FROM vk_members m
                 JOIN vk_groups g ON g.id = m.vk_group_id
                 WHERE g.direction_id = :direction_id
@@ -251,12 +258,62 @@ def vk_search(
             vk_user_id=row[0],
             full_name=row[1],
             gender=row[2],
-            university=row[3],
-            school=row[4],
+            age=row[3],
+            city=row[4],
+            university=row[5],
+            school=row[6],
         )
         for row in rows
     ]
     return VkMemberSearchResponse(items=items)
+
+
+@router.get("/vk/age/{direction_id}", response_model=List[DistributionItem])
+def vk_age(direction_id: int, _: List[str] = Depends(require_any_role)) -> List[DistributionItem]:
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                """
+                SELECT 
+                    CASE 
+                        WHEN age < 18 THEN '<18' 
+                        WHEN age BETWEEN 18 AND 24 THEN '18-24'
+                        WHEN age BETWEEN 25 AND 34 THEN '25-34'
+                        WHEN age BETWEEN 35 AND 44 THEN '35-44'
+                        WHEN age >= 45 THEN '45+'
+                        ELSE 'unknown'
+                    END AS age_group,
+                    COUNT(*) AS count
+                FROM vk_members m
+                JOIN vk_groups g ON g.id = m.vk_group_id
+                WHERE g.direction_id = :direction_id
+                GROUP BY age_group
+                ORDER BY count DESC
+                """
+            ),
+            {"direction_id": direction_id}
+        ).fetchall()
+    return [DistributionItem(label=row[0], count=row[1]) for row in rows]
+
+
+@router.get("/vk/cities/{direction_id}", response_model=List[DistributionItem])
+def vk_cities(direction_id: int, _: List[str] = Depends(require_any_role)) -> List[DistributionItem]:
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(
+                """
+                SELECT COALESCE(city, 'unknown') AS city, COUNT(*) AS count
+                FROM vk_members m
+                JOIN vk_groups g ON g.id = m.vk_group_id
+                WHERE g.direction_id = :direction_id
+                GROUP BY COALESCE(city, 'unknown')
+                ORDER BY count DESC
+                LIMIT 20
+                """
+            ),
+            {"direction_id": direction_id}
+        ).fetchall()
+    return [DistributionItem(label=row[0], count=row[1]) for row in rows]
 
 
 @router.get("/vk/groups/{direction_id}", response_model=DirectionGroupsResponse)
@@ -369,6 +426,51 @@ def tiktok_accounts(
         for row in rows
     ]
     return TikTokUsersResponse(items=items)
+
+
+@router.get("/{platform}/gender/{direction_id}", response_model=List[DistributionItem])
+def social_gender(platform: str, direction_id: int, _: List[str] = Depends(require_any_role)) -> List[DistributionItem]:
+    if platform not in ["instagram", "tiktok"]:
+        raise HTTPException(status_code=404)
+    table_usr = f"{platform}_users"
+    table_acc = f"{platform}_accounts"
+    fk_field = f"{platform}_account_id"
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(f"""
+                SELECT COALESCE(sex, 'unknown') AS gender, COUNT(*) AS count
+                FROM {table_usr} u
+                JOIN {table_acc} a ON a.id = u.{fk_field}
+                WHERE a.direction_id = :did
+                GROUP BY gender
+                ORDER BY count DESC
+            """),
+            {"did": direction_id}
+        ).fetchall()
+    return [DistributionItem(label=row[0], count=row[1]) for row in rows]
+
+
+@router.get("/{platform}/cities/{direction_id}", response_model=List[DistributionItem])
+def social_cities(platform: str, direction_id: int, _: List[str] = Depends(require_any_role)) -> List[DistributionItem]:
+    if platform not in ["instagram", "tiktok"]:
+        raise HTTPException(status_code=404)
+    table_usr = f"{platform}_users"
+    table_acc = f"{platform}_accounts"
+    fk_field = f"{platform}_account_id"
+    with engine.connect() as conn:
+        rows = conn.execute(
+            text(f"""
+                SELECT COALESCE(city, 'unknown') AS city, COUNT(*) AS count
+                FROM {table_usr} u
+                JOIN {table_acc} a ON a.id = u.{fk_field}
+                WHERE a.direction_id = :did
+                GROUP BY city
+                ORDER BY count DESC
+                LIMIT 20
+            """),
+            {"did": direction_id}
+        ).fetchall()
+    return [DistributionItem(label=row[0], count=row[1]) for row in rows]
 
 
 app.include_router(router)

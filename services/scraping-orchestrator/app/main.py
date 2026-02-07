@@ -245,70 +245,127 @@ def stop_job(job_id: int, _: List[str] = Depends(require_developer)) -> dict:
     return {"status": "stopped"}
 
 
-class ImportVkCsvResponse(BaseModel):
+class ImportResponse(BaseModel):
     direction_id: int
-    vk_group_id: str
-    members_imported: int
-    members_updated: int
+    platform: str
+    imported: int
+    updated: int
     errors: List[str]
 
 
-@app.post("/scrape/import/vk-csv", response_model=ImportVkCsvResponse)
+def _ensure_direction_source(conn, direction_id: int, source_type: str, source_identifier: str):
+    """Adds a source to direction_sources if it doesn't exist."""
+    conn.execute(
+        text(
+            """
+            INSERT INTO direction_sources (direction_id, source_type, source_identifier)
+            VALUES (:direction_id, :source_type, :source_identifier)
+            ON CONFLICT (direction_id, source_type, source_identifier) DO NOTHING
+            """
+        ),
+        {
+            "direction_id": direction_id,
+            "source_type": source_type,
+            "source_identifier": source_identifier,
+        },
+    )
+
+
+def _parse_date(date_str: str) -> Optional[datetime]:
+    if not date_str:
+        return None
+    try:
+        # Try YYYY:MM:DD or YYYY-MM-DD
+        formatted = date_str.replace(":", "-")
+        return datetime.fromisoformat(formatted)
+    except Exception:
+        return None
+
+
+@app.post("/scrape/import/vk-csv", response_model=ImportResponse)
 async def import_vk_csv(
     direction_id: int,
     file: UploadFile = File(...),
     _: List[str] = Depends(require_developer),
-) -> ImportVkCsvResponse:
-    # Проверка направления
+) -> ImportResponse:
+    # Check direction
     with engine.connect() as conn:
         dir_row = conn.execute(
             text("SELECT id FROM directions WHERE id = :id"), {"id": direction_id}
         ).fetchone()
         if not dir_row:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND, detail="Direction not found"
-            )
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Direction not found")
 
-    # Чтение CSV
     try:
         content = await file.read()
-        text_content = content.decode("utf-8-sig")  # UTF-8 с BOM
-        csv_reader = csv.DictReader(io.StringIO(text_content))
+        text_content = content.decode("utf-8-sig")
+        csv_reader = list(csv.DictReader(io.StringIO(text_content)))
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid CSV file: {str(e)}"
         )
 
-    members_imported = 0
-    members_updated = 0
+    return await _process_vk_records(direction_id, csv_reader)
+
+
+@app.post("/scrape/import/vk-json", response_model=ImportResponse)
+async def import_vk_json(
+    direction_id: int,
+    file: UploadFile = File(...),
+    _: List[str] = Depends(require_developer),
+) -> ImportResponse:
+    try:
+        content = await file.read()
+        data = json.loads(content)
+        records = data.get("records", []) if isinstance(data, dict) else data
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid JSON: {str(e)}"
+        )
+
+    return await _process_vk_records(direction_id, records)
+
+
+async def _process_vk_records(direction_id: int, records: List[dict]) -> ImportResponse:
+    imported = 0
+    updated = 0
     errors = []
-    vk_group_id = None
     scraped_at = datetime.utcnow()
 
-    # Обработка строк CSV
     with engine.begin() as conn:
-        for idx, row in enumerate(csv_reader, start=2):  # start=2 т.к. первая строка - заголовок
+        for idx, row in enumerate(records, start=2):
             try:
-                # Извлечение данных
-                vk_user_id = str(row.get("VK_ID", "")).strip()
-                first_name = str(row.get("Имя", "")).strip()
-                last_name = str(row.get("Фамилия", "")).strip()
-                gender_raw = str(row.get("Пол", "")).strip()
-                group_id = str(row.get("Группа", "")).strip()
+                # Map fields from new structure
+                # id, group, group_link, user_id, name, sex, age, city, univ, school, last_recently, data_timestap
+                vk_user_id = str(row.get("user_id", row.get("VK_ID", ""))).strip()
+                full_name = str(row.get("name", row.get("ФИО", ""))).strip()
+                gender_raw = str(row.get("sex", row.get("Пол", ""))).strip()
+                group_name = str(row.get("group", row.get("Группа", ""))).strip()
+                group_url = str(row.get("group_link", "")).strip()
+                age = row.get("age")
+                city = row.get("city")
+                university = row.get("univ")
+                school = row.get("school")
+                last_recently = _parse_date(str(row.get("last_recently", "")))
+                data_timestamp = _parse_date(str(row.get("data_timestap", "")))
 
                 if not vk_user_id:
-                    errors.append(f"Строка {idx}: отсутствует VK_ID")
+                    errors.append(f"Row {idx}: missing user_id")
                     continue
 
-                if not group_id:
-                    errors.append(f"Строка {idx}: отсутствует Группа")
+                if not group_name:
+                    errors.append(f"Row {idx}: missing group")
                     continue
 
-                # Сохранение vk_group_id для ответа
-                if vk_group_id is None:
-                    vk_group_id = group_id
+                # Group identifier for DB (use group_url or group_name)
+                # If group_url is a full link, maybe extract the slug? 
+                # For now let's use group_name or slug from URL as the unique ID if possible
+                vk_group_id = group_url.split("/")[-1] if "/" in group_url else group_name
 
-                # Создание или получение группы VK
+                # Sync with direction_sources
+                _ensure_direction_source(conn, direction_id, "vk_group", vk_group_id)
+
+                # Create/Update group
                 group_row = conn.execute(
                     text(
                         """
@@ -316,128 +373,262 @@ async def import_vk_csv(
                         WHERE direction_id = :direction_id AND vk_group_id = :vk_group_id
                         """
                     ),
-                    {"direction_id": direction_id, "vk_group_id": group_id},
+                    {"direction_id": direction_id, "vk_group_id": vk_group_id},
                 ).fetchone()
 
                 if not group_row:
-                    # Создание группы
                     result = conn.execute(
                         text(
                             """
-                            INSERT INTO vk_groups (direction_id, vk_group_id, scraped_at)
-                            VALUES (:direction_id, :vk_group_id, :scraped_at)
+                            INSERT INTO vk_groups (direction_id, vk_group_id, name, url, scraped_at)
+                            VALUES (:direction_id, :vk_group_id, :name, :url, :scraped_at)
                             RETURNING id
                             """
                         ),
                         {
                             "direction_id": direction_id,
-                            "vk_group_id": group_id,
+                            "vk_group_id": vk_group_id,
+                            "name": group_name,
+                            "url": group_url,
                             "scraped_at": scraped_at,
                         },
                     )
-                    vk_group_db_id = result.fetchone()[0]
+                    group_db_id = result.fetchone()[0]
                 else:
-                    vk_group_db_id = group_row[0]
-                    # Обновление scraped_at
+                    group_db_id = group_row[0]
                     conn.execute(
                         text(
                             """
                             UPDATE vk_groups
-                            SET scraped_at = :scraped_at
+                            SET name = :name, url = :url, scraped_at = :scraped_at
                             WHERE id = :id
                             """
                         ),
-                        {"scraped_at": scraped_at, "id": vk_group_db_id},
+                        {
+                            "name": group_name,
+                            "url": group_url,
+                            "scraped_at": scraped_at,
+                            "id": group_db_id,
+                        },
                     )
 
-                # Формирование full_name
-                full_name_parts = [first_name, last_name]
-                full_name = " ".join([p for p in full_name_parts if p]).strip() or None
-
-                # Конвертация пола
+                # Convert gender
                 gender = None
                 if gender_raw:
-                    gender_lower = gender_raw.lower()
-                    if gender_lower in ["м", "m", "male", "мужской"]:
+                    g = gender_raw.lower()
+                    if g in ["m", "м", "male", "мужской"]:
                         gender = "male"
-                    elif gender_lower in ["ж", "f", "female", "женский"]:
+                    elif g in ["f", "ж", "female", "женский"]:
                         gender = "female"
 
-                # Проверка существования участника
+                # Check member
                 existing = conn.execute(
                     text(
-                        """
-                        SELECT id FROM vk_members
-                        WHERE vk_group_id = :vk_group_id AND vk_user_id = :vk_user_id
-                        """
+                        "SELECT id FROM vk_members WHERE vk_group_id = :gid AND vk_user_id = :uid"
                     ),
-                    {"vk_group_id": vk_group_db_id, "vk_user_id": vk_user_id},
+                    {"gid": group_db_id, "uid": vk_user_id},
                 ).fetchone()
 
+                member_data = {
+                    "full_name": full_name or None,
+                    "gender": gender,
+                    "age": int(age) if age and str(age).isdigit() else None,
+                    "city": city,
+                    "university": university,
+                    "school": school,
+                    "last_recently": last_recently,
+                    "data_timestamp": data_timestamp or scraped_at,
+                    "scraped_at": scraped_at,
+                }
+
                 if existing:
-                    # Обновление существующего
                     conn.execute(
                         text(
                             """
                             UPDATE vk_members
-                            SET full_name = :full_name,
-                                gender = :gender,
+                            SET full_name = :full_name, gender = :gender, age = :age,
+                                city = :city, university = :university, school = :school,
+                                last_recently = :last_recently, data_timestamp = :data_timestamp,
                                 scraped_at = :scraped_at
                             WHERE id = :id
                             """
                         ),
-                        {
-                            "full_name": full_name,
-                            "gender": gender,
-                            "scraped_at": scraped_at,
-                            "id": existing[0],
-                        },
+                        {**member_data, "id": existing[0]},
                     )
-                    members_updated += 1
+                    updated += 1
                 else:
-                    # Вставка нового
                     conn.execute(
                         text(
                             """
                             INSERT INTO vk_members (
-                                vk_group_id, vk_user_id, full_name, gender, scraped_at
+                                vk_group_id, vk_user_id, full_name, gender, age, 
+                                city, university, school, last_recently, data_timestamp, scraped_at
                             )
-                            VALUES (:vk_group_id, :vk_user_id, :full_name, :gender, :scraped_at)
+                            VALUES (
+                                :vk_group_id, :vk_user_id, :full_name, :gender, :age,
+                                :city, :university, :school, :last_recently, :data_timestamp, :scraped_at
+                            )
                             """
                         ),
-                        {
-                            "vk_group_id": vk_group_db_id,
-                            "vk_user_id": vk_user_id,
-                            "full_name": full_name,
-                            "gender": gender,
-                            "scraped_at": scraped_at,
-                        },
+                        {"vk_group_id": group_db_id, "vk_user_id": vk_user_id, **member_data},
                     )
-                    members_imported += 1
+                    imported += 1
 
             except Exception as e:
-                errors.append(f"Строка {idx}: {str(e)}")
+                errors.append(f"Record {idx}: {str(e)}")
                 continue
 
-        # Обновление members_count группы
-        if vk_group_id:
-            conn.execute(
-                text(
-                    """
-                    UPDATE vk_groups
-                    SET members_count = (
-                        SELECT COUNT(*) FROM vk_members WHERE vk_group_id = vk_groups.id
-                    )
-                    WHERE direction_id = :direction_id AND vk_group_id = :vk_group_id
-                    """
-                ),
-                {"direction_id": direction_id, "vk_group_id": vk_group_id},
-            )
-
-    return ImportVkCsvResponse(
+    return ImportResponse(
         direction_id=direction_id,
-        vk_group_id=vk_group_id or "",
-        members_imported=members_imported,
-        members_updated=members_updated,
-        errors=errors[:50],  # Ограничиваем количество ошибок
+        platform="vk",
+        imported=imported,
+        updated=updated,
+        errors=errors[:50],
     )
+
+
+@app.post("/scrape/import/instagram-csv", response_model=ImportResponse)
+async def import_instagram_csv(
+    direction_id: int,
+    file: UploadFile = File(...),
+    _: List[str] = Depends(require_developer),
+) -> ImportResponse:
+    try:
+        content = await file.read()
+        text_content = content.decode("utf-8-sig")
+        csv_reader = list(csv.DictReader(io.StringIO(text_content)))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid CSV: {str(e)}")
+    return await _process_social_records(direction_id, "instagram", csv_reader)
+
+
+@app.post("/scrape/import/instagram-json", response_model=ImportResponse)
+async def import_instagram_json(
+    direction_id: int,
+    file: UploadFile = File(...),
+    _: List[str] = Depends(require_developer),
+) -> ImportResponse:
+    try:
+        content = await file.read()
+        records = json.loads(content)
+        if isinstance(records, dict): records = records.get("records", [])
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(e)}")
+    return await _process_social_records(direction_id, "instagram", records)
+
+
+@app.post("/scrape/import/tiktok-csv", response_model=ImportResponse)
+async def import_tiktok_csv(
+    direction_id: int,
+    file: UploadFile = File(...),
+    _: List[str] = Depends(require_developer),
+) -> ImportResponse:
+    try:
+        content = await file.read()
+        text_content = content.decode("utf-8-sig")
+        csv_reader = list(csv.DictReader(io.StringIO(text_content)))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid CSV: {str(e)}")
+    return await _process_social_records(direction_id, "tiktok", csv_reader)
+
+
+@app.post("/scrape/import/tiktok-json", response_model=ImportResponse)
+async def import_tiktok_json(
+    direction_id: int,
+    file: UploadFile = File(...),
+    _: List[str] = Depends(require_developer),
+) -> ImportResponse:
+    try:
+        content = await file.read()
+        records = json.loads(content)
+        if isinstance(records, dict): records = records.get("records", [])
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid JSON: {str(e)}")
+    return await _process_social_records(direction_id, "tiktok", records)
+
+
+async def _process_social_records(direction_id: int, platform: str, records: List[dict]) -> ImportResponse:
+    imported = 0
+    updated = 0
+    errors = []
+    scraped_at = datetime.utcnow()
+    
+    table_acc = f"{platform}_accounts"
+    table_usr = f"{platform}_users"
+    source_type = f"{platform}_account"
+    fk_field = f"{platform}_account_id"
+
+    with engine.begin() as conn:
+        for idx, row in enumerate(records, start=2):
+            try:
+                # id, group_name, username, link, sex, city, data_timestap
+                username = str(row.get("username", "")).strip()
+                group_name = str(row.get("group_name", "")).strip()
+                link = str(row.get("link", "")).strip()
+                sex = str(row.get("sex", "")).strip()
+                city = str(row.get("city", "")).strip()
+                data_timestamp = _parse_date(str(row.get("data_timestap", "")))
+
+                if not username:
+                    errors.append(f"Row {idx}: missing username")
+                    continue
+
+                # Account is the "source"
+                # If group_name is provided, use it as the source identifier, otherwise username
+                source_id = group_name if group_name else username
+                _ensure_direction_source(conn, direction_id, source_type, source_id)
+
+                # Sync account
+                acc = conn.execute(
+                    text(f"SELECT id FROM {table_acc} WHERE direction_id = :did AND username = :u"),
+                    {"did": direction_id, "u": source_id}
+                ).fetchone()
+
+                if not acc:
+                    res = conn.execute(
+                        text(f"INSERT INTO {table_acc} (direction_id, username, url, name, scraped_at) "
+                             "VALUES (:did, :u, :l, :n, :s) RETURNING id"),
+                        {"did": direction_id, "u": source_id, "l": link, "n": group_name, "s": scraped_at}
+                    )
+                    acc_id = res.fetchone()[0]
+                else:
+                    acc_id = acc[0]
+                    conn.execute(
+                        text(f"UPDATE {table_acc} SET url = :l, name = :n, scraped_at = :s WHERE id = :id"),
+                        {"l": link, "n": group_name, "s": scraped_at, "id": acc_id}
+                    )
+
+                # Sync user
+                existing = conn.execute(
+                    text(f"SELECT id FROM {table_usr} WHERE {fk_field} = :aid AND username = :u"),
+                    {"aid": acc_id, "u": username}
+                ).fetchone()
+
+                usr_data = {
+                    "username": username,
+                    "url": link,
+                    "sex": sex,
+                    "city": city,
+                    "data_timestamp": data_timestamp or scraped_at,
+                    "scraped_at": scraped_at
+                }
+
+                if existing:
+                    conn.execute(
+                        text(f"UPDATE {table_usr} SET url = :url, sex = :sex, city = :city, "
+                             "data_timestamp = :data_timestamp, scraped_at = :scraped_at WHERE id = :id"),
+                        {**usr_data, "id": existing[0]}
+                    )
+                    updated += 1
+                else:
+                    conn.execute(
+                        text(f"INSERT INTO {table_usr} ({fk_field}, username, url, sex, city, data_timestamp, scraped_at) "
+                             f"VALUES (:aid, :username, :url, :sex, :city, :data_timestamp, :scraped_at)"),
+                        {"aid": acc_id, **usr_data}
+                    )
+                    imported += 1
+
+            except Exception as e:
+                errors.append(f"Record {idx}: {str(e)}")
+    
+    return ImportResponse(direction_id=direction_id, platform=platform, imported=imported, updated=updated, errors=errors[:50])

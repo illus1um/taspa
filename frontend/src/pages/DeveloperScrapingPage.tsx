@@ -120,32 +120,30 @@ export const DeveloperScrapingPage = () => {
       return;
     }
 
-    // Пока реализован только импорт VK CSV на бэкенде.
-    if (!(importPlatform === "vk" && importFormat === "csv")) {
-      setError("Импорт для выбранной соцсети/формата пока не реализован на бэкенде");
-      return;
-    }
-
     setError(null);
     setSuccess(null);
     setImporting(true);
     try {
-      const formData = new FormData();
-      formData.append("file", importFile);
-
       const token = getToken();
       const apiBase = import.meta.env.VITE_API_BASE || "/api";
-      const response = await fetch(
-        `${apiBase}/scrape/import/vk-csv?direction_id=${importDirectionId}`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          credentials: "include",
-          body: formData,
-        }
-      );
+      const endpoint = `${apiBase}/scrape/import/${importPlatform}-${importFormat}?direction_id=${importDirectionId}`;
+
+      const headers: Record<string, string> = {
+        Authorization: `Bearer ${token}`,
+      };
+
+      // Both CSV and JSON should be sent as multipart/form-data
+      const formData = new FormData();
+      formData.append("file", importFile);
+      const body = formData;
+      // fetch with FormData automatically sets multipart/form-data with boundary
+
+      const response = await fetch(endpoint, {
+        method: "POST",
+        headers,
+        credentials: "include",
+        body,
+      });
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ detail: "Ошибка импорта" }));
@@ -154,7 +152,7 @@ export const DeveloperScrapingPage = () => {
 
       const result = await response.json();
       const errorCount = result.errors?.length || 0;
-      const successMsg = `Импортировано: ${result.members_imported}, обновлено: ${result.members_updated}${errorCount > 0 ? `. Ошибок: ${errorCount}` : ""
+      const successMsg = `Импортировано: ${result.imported}, обновлено: ${result.updated}${errorCount > 0 ? `. Ошибок: ${errorCount}` : ""
         }`;
       setSuccess(successMsg);
       setImportFile(null);
@@ -280,8 +278,7 @@ export const DeveloperScrapingPage = () => {
                       {importFile ? importFile.name : "Выберите файл для импорта"}
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      Форматы: CSV или JSON. Сейчас на бэкенде поддержан только VK CSV, остальные
-                      варианты появятся позже.
+                      Форматы: CSV или JSON. Поддерживаются VK, Instagram и TikTok.
                     </Typography>
                   </Stack>
                 </label>

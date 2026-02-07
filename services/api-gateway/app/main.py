@@ -221,8 +221,8 @@ async def scrape_config_update(
     return Response(content=resp.content, status_code=resp.status_code, headers=response_headers)
 
 
-@app.post("/scrape/import/vk-csv")
-async def scrape_import_vk_csv(request: Request) -> Response:
+@app.api_route("/scrape/import/{platform}-{format}", methods=["POST"])
+async def scrape_import(platform: str, format: str, request: Request) -> Response:
     if not SCRAPING_SERVICE_URL:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -231,20 +231,40 @@ async def scrape_import_vk_csv(request: Request) -> Response:
     user_meta = _require_jwt(request)
     headers = _filter_headers(request.headers.items())
     headers.pop("host", None)
-    headers.pop("content-type", None)  # Удаляем, чтобы httpx установил правильный для multipart
+    headers.pop("content-type", None)
+    headers.pop("content-length", None)
     headers["X-User-Id"] = user_meta["user_id"]
     headers["X-Roles"] = user_meta["roles"]
 
-    form_data = await request.form()
-    url = f"{SCRAPING_SERVICE_URL.rstrip('/')}/scrape/import/vk-csv"
-    # Пробрасываем query-параметры (в т.ч. direction_id) в оркестратор
-    async with httpx.AsyncClient() as client:
-        resp = await client.post(
-            url,
-            params=request.query_params,
-            data=form_data,
-            headers=headers,
-        )
+    url = f"{SCRAPING_SERVICE_URL.rstrip('/')}/scrape/import/{platform}-{format}"
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        if "multipart/form-data" in request.headers.get("content-type", ""):
+            form_data = await request.form()
+            files = {}
+            data = {}
+            for key, value in form_data.items():
+                if hasattr(value, 'file'):
+                    files[key] = (value.filename, value.file, value.content_type)
+                else:
+                    data[key] = value
+
+            resp = await client.post(
+                url,
+                params=request.query_params,
+                files=files,
+                data=data,
+                headers=headers,
+            )
+        else:
+            body = await request.body()
+            resp = await client.post(
+                url,
+                params=request.query_params,
+                content=body,
+                headers=headers,
+            )
+
     response_headers = _filter_headers(resp.headers.items())
     return Response(content=resp.content, status_code=resp.status_code, headers=response_headers)
 

@@ -35,9 +35,7 @@ import {
   Search,
   Download,
   Instagram,
-  RefreshCcw,
   ExternalLink,
-  Filter,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
@@ -45,8 +43,6 @@ import {
   CartesianGrid,
   Cell,
   Legend,
-  Line,
-  LineChart,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -75,6 +71,7 @@ type VkMemberItem = {
   school?: string | null;
 };
 type InstagramItem = { username: string; url?: string | null; location?: string | null };
+type DistributionItem = { label: string; count: number };
 type TikTokItem = {
   username: string;
   url?: string | null;
@@ -83,6 +80,14 @@ type TikTokItem = {
 };
 
 const GENDER_COLORS = [colors.primary.main, colors.secondary.main, colors.grey[400]];
+const CHART_COLORS = [
+  colors.primary.main,
+  colors.secondary.main,
+  colors.success.main,
+  colors.warning.main,
+  colors.error.main,
+  colors.info.main,
+];
 
 // Компонент статистической карточки
 const StatCard = ({
@@ -217,8 +222,8 @@ export const UserAnalyticsPage = () => {
     () => ({ vk: 0, instagram: 1, tiktok: 2 }),
     []
   );
-  const [activePlatform, setActivePlatform] = useState(
-    platform && platformToTab[platform] !== undefined ? platform : "vk"
+  const [activePlatform, setActivePlatform] = useState<string>(
+    platform && (platformToTab as any)[platform] !== undefined ? platform : "vk"
   );
 
   const [summary, setSummary] = useState<VkSummary | null>(null);
@@ -231,6 +236,10 @@ export const UserAnalyticsPage = () => {
   const [instagramUsers, setInstagramUsers] = useState<InstagramItem[]>([]);
   const [tiktokAccounts, setTiktokAccounts] = useState<TikTokItem[]>([]);
   const [tiktokUsers, setTiktokUsers] = useState<TikTokItem[]>([]);
+  const [vkAgeDistribution, setVkAgeDistribution] = useState<DistributionItem[]>([]);
+  const [vkCityDistribution, setVkCityDistribution] = useState<DistributionItem[]>([]);
+  const [socialGender, setSocialGender] = useState<DistributionItem[]>([]);
+  const [socialCities, setSocialCities] = useState<DistributionItem[]>([]);
   const [exportStatus, setExportStatus] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
 
@@ -256,7 +265,7 @@ export const UserAnalyticsPage = () => {
   }, []);
 
   useEffect(() => {
-    if (!platform || platformToTab[platform] === undefined) {
+    if (!platform || (platformToTab as any)[platform] === undefined) {
       navigate("/analytics/vk", { replace: true });
       return;
     }
@@ -264,51 +273,67 @@ export const UserAnalyticsPage = () => {
   }, [platform, platformToTab, navigate]);
 
   useEffect(() => {
-    if (!directionId) {
+    if (!directionId || !activePlatform) {
       return;
     }
     const loadAnalytics = async () => {
       setLoadingData(true);
       setError(null);
       try {
-        const [
-          summaryData,
-          genderData,
-          universitiesData,
-          schoolsData,
-          timelineData,
-          groupsData,
-          instagramAccountsData,
-          instagramUsersData,
-          tiktokAccountsData,
-          tiktokUsersData,
-        ] = await Promise.all([
-          apiFetch(`/analytics/vk/summary/${directionId}`),
-          apiFetch(`/analytics/vk/gender/${directionId}`),
-          apiFetch(`/analytics/vk/universities/${directionId}`),
-          apiFetch(`/analytics/vk/schools/${directionId}`),
-          apiFetch(`/analytics/vk/timeline/${directionId}`),
-          apiFetch(`/analytics/vk/groups/${directionId}`),
-          apiFetch(`/analytics/instagram/accounts/${directionId}`),
-          apiFetch(`/analytics/instagram/users/${directionId}`),
-          apiFetch(`/analytics/tiktok/accounts/${directionId}`),
-          apiFetch(`/analytics/tiktok/users/${directionId}`),
-        ]);
+        if (activePlatform === "vk") {
+          const [
+            summaryData,
+            genderData,
+            universitiesData,
+            schoolsData,
+            timelineData,
+            groupsData,
+            vkAgeData,
+            vkCityData,
+          ] = await Promise.all([
+            apiFetch(`/analytics/vk/summary/${directionId}`),
+            apiFetch(`/analytics/vk/gender/${directionId}`),
+            apiFetch(`/analytics/vk/universities/${directionId}`),
+            apiFetch(`/analytics/vk/schools/${directionId}`),
+            apiFetch(`/analytics/vk/timeline/${directionId}`),
+            apiFetch(`/analytics/vk/groups/${directionId}`),
+            apiFetch(`/analytics/vk/age/${directionId}`),
+            apiFetch(`/analytics/vk/cities/${directionId}`),
+          ]);
 
-        setSummary(summaryData as VkSummary);
-        setGender(genderData as VkGenderItem[]);
-        setUniversities(universitiesData as VkUniItem[]);
-        setSchools(schoolsData as VkSchoolItem[]);
-        setTimeline(timelineData as VkTimelineItem[]);
-        setGroups((groupsData as { items: VkGroupItem[] }).items ?? []);
-        setInstagramAccounts(
-          (instagramAccountsData as { items: InstagramItem[] }).items ?? []
-        );
-        setInstagramUsers(
-          (instagramUsersData as { items: InstagramItem[] }).items ?? []
-        );
-        setTiktokAccounts((tiktokAccountsData as { items: TikTokItem[] }).items ?? []);
-        setTiktokUsers((tiktokUsersData as { items: TikTokItem[] }).items ?? []);
+          setSummary(summaryData as VkSummary);
+          setGender(genderData as VkGenderItem[]);
+          setUniversities(universitiesData as VkUniItem[]);
+          setSchools(schoolsData as VkSchoolItem[]);
+          setTimeline(timelineData as VkTimelineItem[]);
+          setGroups((groupsData as { items: VkGroupItem[] }).items ?? []);
+          setVkAgeDistribution(vkAgeData as DistributionItem[]);
+          setVkCityDistribution(vkCityData as DistributionItem[]);
+        } else if (activePlatform === "instagram") {
+          const [accountsData, usersData, genderData, citiesData] = await Promise.all([
+            apiFetch(`/analytics/instagram/accounts/${directionId}`),
+            apiFetch(`/analytics/instagram/users/${directionId}`),
+            apiFetch(`/analytics/instagram/gender/${directionId}`),
+            apiFetch(`/analytics/instagram/cities/${directionId}`),
+          ]);
+
+          setInstagramAccounts((accountsData as { items: InstagramItem[] }).items ?? []);
+          setInstagramUsers((usersData as { items: InstagramItem[] }).items ?? []);
+          setSocialGender(genderData as DistributionItem[]);
+          setSocialCities(citiesData as DistributionItem[]);
+        } else if (activePlatform === "tiktok") {
+          const [accountsData, usersData, genderData, citiesData] = await Promise.all([
+            apiFetch(`/analytics/tiktok/accounts/${directionId}`),
+            apiFetch(`/analytics/tiktok/users/${directionId}`),
+            apiFetch(`/analytics/tiktok/gender/${directionId}`),
+            apiFetch(`/analytics/tiktok/cities/${directionId}`),
+          ]);
+
+          setTiktokAccounts((accountsData as { items: TikTokItem[] }).items ?? []);
+          setTiktokUsers((usersData as { items: TikTokItem[] }).items ?? []);
+          setSocialGender(genderData as DistributionItem[]);
+          setSocialCities(citiesData as DistributionItem[]);
+        }
       } catch (err) {
         setError((err as Error).message);
       } finally {
@@ -316,7 +341,7 @@ export const UserAnalyticsPage = () => {
       }
     };
     loadAnalytics();
-  }, [directionId]);
+  }, [directionId, activePlatform]);
 
   const handleSearch = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -362,7 +387,6 @@ export const UserAnalyticsPage = () => {
     }
   };
 
-  const currentDirection = directions.find((d) => d.id === directionId);
 
   // Преобразуем данные пола для красивого отображения
   const genderDisplay = gender.map((g) => ({
@@ -425,7 +449,7 @@ export const UserAnalyticsPage = () => {
         <Stack spacing={3}>
           {/* Статистика */}
           <Grid container spacing={3}>
-            <Grid item xs={12} sm={6} lg={3}>
+            <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
               <StatCard
                 title="Всего подписчиков"
                 value={summary?.total_members?.toLocaleString() ?? "—"}
@@ -434,7 +458,7 @@ export const UserAnalyticsPage = () => {
                 loading={loadingData}
               />
             </Grid>
-            <Grid item xs={12} sm={6} lg={3}>
+            <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
               <StatCard
                 title="Групп в направлении"
                 value={summary?.group_count ?? "—"}
@@ -443,7 +467,7 @@ export const UserAnalyticsPage = () => {
                 loading={loadingData}
               />
             </Grid>
-            <Grid item xs={12} sm={6} lg={3}>
+            <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
               <StatCard
                 title="ВУЗов"
                 value={universities.length}
@@ -452,7 +476,7 @@ export const UserAnalyticsPage = () => {
                 loading={loadingData}
               />
             </Grid>
-            <Grid item xs={12} sm={6} lg={3}>
+            <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
               <StatCard
                 title="Школ"
                 value={schools.length}
@@ -465,7 +489,7 @@ export const UserAnalyticsPage = () => {
 
           {/* Графики */}
           <Grid container spacing={3}>
-            <Grid item xs={12} lg={6}>
+            <Grid size={{ xs: 12, lg: 6 }}>
               <SectionCard
                 title="Распределение по полу"
                 icon={<TrendingUp size={24} />}
@@ -489,8 +513,8 @@ export const UserAnalyticsPage = () => {
                           innerRadius={60}
                           outerRadius={100}
                           paddingAngle={3}
-                          label={({ name, percent }) =>
-                            `${name}: ${(percent * 100).toFixed(0)}%`
+                          label={(props: any) =>
+                            `${props.name}: ${((props.percent || 0) * 100).toFixed(0)}%`
                           }
                         >
                           {genderDisplay.map((entry, index) => (
@@ -501,7 +525,7 @@ export const UserAnalyticsPage = () => {
                           ))}
                         </Pie>
                         <RechartsTooltip
-                          formatter={(value: number) => [value.toLocaleString(), "Человек"]}
+                          formatter={(value: any) => [(value || 0).toLocaleString(), "Человек"]}
                         />
                         <Legend />
                       </PieChart>
@@ -510,7 +534,7 @@ export const UserAnalyticsPage = () => {
                 </Box>
               </SectionCard>
             </Grid>
-            <Grid item xs={12} lg={6}>
+            <Grid size={{ xs: 12, lg: 6 }}>
               <SectionCard
                 title="Временная динамика"
                 icon={<TrendingUp size={24} />}
@@ -559,7 +583,7 @@ export const UserAnalyticsPage = () => {
 
           {/* Таблицы ВУЗов и школ */}
           <Grid container spacing={3}>
-            <Grid item xs={12} lg={6}>
+            <Grid size={{ xs: 12, lg: 6 }}>
               <SectionCard title="ВУЗы" icon={<Landmark size={24} />}>
                 <TableContainer sx={{ maxHeight: 300 }}>
                   <Table size="small" stickyHeader>
@@ -595,7 +619,7 @@ export const UserAnalyticsPage = () => {
                 </TableContainer>
               </SectionCard>
             </Grid>
-            <Grid item xs={12} lg={6}>
+            <Grid size={{ xs: 12, lg: 6 }}>
               <SectionCard title="Школы" icon={<GraduationCap size={24} />}>
                 <TableContainer sx={{ maxHeight: 300 }}>
                   <Table size="small" stickyHeader>
@@ -626,6 +650,73 @@ export const UserAnalyticsPage = () => {
                           </TableCell>
                         </TableRow>
                       )}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </SectionCard>
+            </Grid>
+          </Grid>
+
+          {/* Распределение по возрасту и городам */}
+          <Grid container spacing={3}>
+            <Grid size={{ xs: 12, lg: 6 }}>
+              <SectionCard title="Распределение по возрасту" icon={<TrendingUp size={24} />}>
+                <Box sx={{ height: 280 }}>
+                  {!vkAgeDistribution.length ? (
+                    <EmptyState message="Нет данных о возрасте" />
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={vkAgeDistribution}
+                          dataKey="count"
+                          nameKey="label"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={100}
+                          paddingAngle={3}
+                          label={(props: any) => `${props.label}: ${((props.percent || 0) * 100).toFixed(0)}%`}
+                        >
+                          {vkAgeDistribution.map((_, index) => (
+                            <Cell
+                              key={`cell-${index}`}
+                              fill={CHART_COLORS[index % CHART_COLORS.length]}
+                            />
+                          ))}
+                        </Pie>
+                        <RechartsTooltip />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                </Box>
+              </SectionCard>
+            </Grid>
+            <Grid size={{ xs: 12, lg: 6 }}>
+              <SectionCard title="Города" icon={<Landmark size={24} />}>
+                <TableContainer sx={{ maxHeight: 280 }}>
+                  <Table size="small" stickyHeader>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Город</TableCell>
+                        <TableCell align="right">Кол-во</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {vkCityDistribution.slice(0, 10).map((item, index) => (
+                        <TableRow key={`${item.label}-${index}`}>
+                          <TableCell>{item.label || "Не указан"}</TableCell>
+                          <TableCell align="right">
+                            <Chip
+                              size="small"
+                              label={item.count.toLocaleString()}
+                              color="info"
+                              variant="outlined"
+                            />
+                          </TableCell>
+                        </TableRow>
+                      ))}
                     </TableBody>
                   </Table>
                 </TableContainer>
@@ -787,7 +878,7 @@ export const UserAnalyticsPage = () => {
       {activePlatform === "instagram" && (
         <Stack spacing={3}>
           <Grid container spacing={3}>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <StatCard
                 title="Аккаунтов"
                 value={instagramAccounts.length}
@@ -796,7 +887,7 @@ export const UserAnalyticsPage = () => {
                 loading={loadingData}
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <StatCard
                 title="Пользователей"
                 value={instagramUsers.length}
@@ -808,7 +899,73 @@ export const UserAnalyticsPage = () => {
           </Grid>
 
           <Grid container spacing={3}>
-            <Grid item xs={12} lg={6}>
+            <Grid size={{ xs: 12, lg: 6 }}>
+              <SectionCard title="Распределение по полу" icon={<User size={24} />}>
+                <Box sx={{ height: 280 }}>
+                  {!socialGender.length ? (
+                    <EmptyState message="Нет данных о поле" />
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={socialGender}
+                          dataKey="count"
+                          nameKey="label"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={100}
+                          paddingAngle={3}
+                          label={(props: any) => `${props.label}: ${((props.percent || 0) * 100).toFixed(0)}%`}
+                        >
+                          {socialGender.map((_, index) => (
+                            <Cell
+                              key={`cell-${index}`}
+                              fill={GENDER_COLORS[index % GENDER_COLORS.length]}
+                            />
+                          ))}
+                        </Pie>
+                        <RechartsTooltip />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                </Box>
+              </SectionCard>
+            </Grid>
+            <Grid size={{ xs: 12, lg: 6 }}>
+              <SectionCard title="Города" icon={<Landmark size={24} />}>
+                <TableContainer sx={{ maxHeight: 280 }}>
+                  <Table size="small" stickyHeader>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Город</TableCell>
+                        <TableCell align="right">Кол-во</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {socialCities.slice(0, 10).map((item, index) => (
+                        <TableRow key={`${item.label}-${index}`}>
+                          <TableCell>{item.label || "Не указан"}</TableCell>
+                          <TableCell align="right">
+                            <Chip
+                              size="small"
+                              label={item.count.toLocaleString()}
+                              color="info"
+                              variant="outlined"
+                            />
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </SectionCard>
+            </Grid>
+          </Grid>
+
+          <Grid container spacing={3}>
+            <Grid size={{ xs: 12, lg: 6 }}>
               <SectionCard title="Аккаунты" icon={<Instagram size={24} />}>
                 <TableContainer sx={{ maxHeight: 400 }}>
                   <Table size="small" stickyHeader>
@@ -853,7 +1010,7 @@ export const UserAnalyticsPage = () => {
                 </TableContainer>
               </SectionCard>
             </Grid>
-            <Grid item xs={12} lg={6}>
+            <Grid size={{ xs: 12, lg: 6 }}>
               <SectionCard title="Пользователи" icon={<Users size={24} />}>
                 <TableContainer sx={{ maxHeight: 400 }}>
                   <Table size="small" stickyHeader>
@@ -921,7 +1078,7 @@ export const UserAnalyticsPage = () => {
       {activePlatform === "tiktok" && (
         <Stack spacing={3}>
           <Grid container spacing={3}>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <StatCard
                 title="Аккаунтов"
                 value={tiktokAccounts.length}
@@ -945,7 +1102,7 @@ export const UserAnalyticsPage = () => {
                 loading={loadingData}
               />
             </Grid>
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <StatCard
                 title="Пользователей"
                 value={tiktokUsers.length}
@@ -957,7 +1114,73 @@ export const UserAnalyticsPage = () => {
           </Grid>
 
           <Grid container spacing={3}>
-            <Grid item xs={12} lg={6}>
+            <Grid size={{ xs: 12, lg: 6 }}>
+              <SectionCard title="Распределение по полу" icon={<User size={24} />}>
+                <Box sx={{ height: 280 }}>
+                  {!socialGender.length ? (
+                    <EmptyState message="Нет данных о поле" />
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={socialGender}
+                          dataKey="count"
+                          nameKey="label"
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={100}
+                          paddingAngle={3}
+                          label={(props: any) => `${props.label}: ${((props.percent || 0) * 100).toFixed(0)}%`}
+                        >
+                          {socialGender.map((_, index) => (
+                            <Cell
+                              key={`cell-${index}`}
+                              fill={GENDER_COLORS[index % GENDER_COLORS.length]}
+                            />
+                          ))}
+                        </Pie>
+                        <RechartsTooltip />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  )}
+                </Box>
+              </SectionCard>
+            </Grid>
+            <Grid size={{ xs: 12, lg: 6 }}>
+              <SectionCard title="Города" icon={<Landmark size={24} />}>
+                <TableContainer sx={{ maxHeight: 280 }}>
+                  <Table size="small" stickyHeader>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Город</TableCell>
+                        <TableCell align="right">Кол-во</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {socialCities.slice(0, 10).map((item, index) => (
+                        <TableRow key={`${item.label}-${index}`}>
+                          <TableCell>{item.label || "Не указан"}</TableCell>
+                          <TableCell align="right">
+                            <Chip
+                              size="small"
+                              label={item.count.toLocaleString()}
+                              color="info"
+                              variant="outlined"
+                            />
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              </SectionCard>
+            </Grid>
+          </Grid>
+
+          <Grid container spacing={3}>
+            <Grid size={{ xs: 12, lg: 6 }}>
               <SectionCard
                 title="Аккаунты"
                 icon={
@@ -1015,7 +1238,7 @@ export const UserAnalyticsPage = () => {
                 </TableContainer>
               </SectionCard>
             </Grid>
-            <Grid item xs={12} lg={6}>
+            <Grid size={{ xs: 12, lg: 6 }}>
               <SectionCard title="Пользователи" icon={<Users size={24} />}>
                 <TableContainer sx={{ maxHeight: 400 }}>
                   <Table size="small" stickyHeader>
