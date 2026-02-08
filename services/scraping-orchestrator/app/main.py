@@ -275,8 +275,10 @@ def _parse_date(date_str: str) -> Optional[datetime]:
     if not date_str:
         return None
     try:
-        # Try YYYY:MM:DD or YYYY-MM-DD
-        formatted = date_str.replace(":", "-")
+        # Try YYYY:MM:DD or YYYY-MM-DD (only replace colons in the date part, not time)
+        parts = date_str.split(" ", 1)
+        parts[0] = parts[0].replace(":", "-")
+        formatted = " ".join(parts)
         return datetime.fromisoformat(formatted)
     except Exception:
         return None
@@ -299,7 +301,10 @@ async def import_vk_csv(
     try:
         content = await file.read()
         text_content = content.decode("utf-8-sig")
-        csv_reader = list(csv.DictReader(io.StringIO(text_content)))
+        # Auto-detect delimiter: tab or comma
+        first_line = text_content.split("\n", 1)[0]
+        delimiter = "\t" if "\t" in first_line else ","
+        csv_reader = list(csv.DictReader(io.StringIO(text_content), delimiter=delimiter))
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail=f"Invalid CSV file: {str(e)}"
@@ -347,7 +352,7 @@ async def _process_vk_records(direction_id: int, records: List[dict]) -> ImportR
                 university = row.get("univ")
                 school = row.get("school")
                 last_recently = _parse_date(str(row.get("last_recently", "")))
-                data_timestamp = _parse_date(str(row.get("data_timestap", "")))
+                data_timestamp = _parse_date(str(row.get("data_timestamp", "")))
 
                 if not vk_user_id:
                     errors.append(f"Row {idx}: missing user_id")
@@ -496,7 +501,9 @@ async def import_instagram_csv(
     try:
         content = await file.read()
         text_content = content.decode("utf-8-sig")
-        csv_reader = list(csv.DictReader(io.StringIO(text_content)))
+        first_line = text_content.split("\n", 1)[0]
+        delimiter = "\t" if "\t" in first_line else ","
+        csv_reader = list(csv.DictReader(io.StringIO(text_content), delimiter=delimiter))
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid CSV: {str(e)}")
     return await _process_social_records(direction_id, "instagram", csv_reader)
@@ -526,7 +533,9 @@ async def import_tiktok_csv(
     try:
         content = await file.read()
         text_content = content.decode("utf-8-sig")
-        csv_reader = list(csv.DictReader(io.StringIO(text_content)))
+        first_line = text_content.split("\n", 1)[0]
+        delimiter = "\t" if "\t" in first_line else ","
+        csv_reader = list(csv.DictReader(io.StringIO(text_content), delimiter=delimiter))
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Invalid CSV: {str(e)}")
     return await _process_social_records(direction_id, "tiktok", csv_reader)
@@ -567,7 +576,7 @@ async def _process_social_records(direction_id: int, platform: str, records: Lis
                 link = str(row.get("link", "")).strip()
                 sex = str(row.get("sex", "")).strip()
                 city = str(row.get("city", "")).strip()
-                data_timestamp = _parse_date(str(row.get("data_timestap", "")))
+                data_timestamp = _parse_date(str(row.get("data_timestamp", "")))
 
                 if not username:
                     errors.append(f"Row {idx}: missing username")

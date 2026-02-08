@@ -238,7 +238,7 @@ async def scrape_import(platform: str, format: str, request: Request) -> Respons
 
     url = f"{SCRAPING_SERVICE_URL.rstrip('/')}/scrape/import/{platform}-{format}"
 
-    async with httpx.AsyncClient(timeout=60.0) as client:
+    async with httpx.AsyncClient(timeout=1000.0) as client:
         if "multipart/form-data" in request.headers.get("content-type", ""):
             form_data = await request.form()
             files = {}

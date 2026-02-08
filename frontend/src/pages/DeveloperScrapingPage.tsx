@@ -4,9 +4,10 @@ import {
   Button,
   Card,
   CardContent,
+  Chip,
   FormControl,
-  Grid,
   InputLabel,
+  LinearProgress,
   MenuItem,
   Select,
   Stack,
@@ -14,78 +15,25 @@ import {
   Typography,
   alpha,
 } from "@mui/material";
-import { FileUpload, Upload } from "@mui/icons-material";
-import { useEffect, useState } from "react";
+import {
+  CloudUpload,
+  Description,
+  InsertDriveFile,
+  Storage,
+  Upload,
+} from "@mui/icons-material";
+import { useEffect, useRef, useState } from "react";
 
 import { apiFetch, getToken } from "../api/client";
 import { colors } from "../theme";
 
 type Direction = { id: number; name: string };
 
-const SectionCard = ({
-  title,
-  icon,
-  children,
-  headerColor,
-}: {
-  title: string;
-  icon?: React.ReactNode;
-  children: React.ReactNode;
-  headerColor?: string;
-}) => (
-  <Card
-    sx={{
-      position: "relative",
-      overflow: "visible",
-      "&::before": headerColor
-        ? {
-          content: '""',
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: 4,
-          background: headerColor,
-          borderRadius: "12px 12px 0 0",
-        }
-        : {},
-    }}
-  >
-    <CardContent sx={{ p: 3 }}>
-      <Stack
-        direction="row"
-        justifyContent="space-between"
-        alignItems="center"
-        sx={{ mb: 2 }}
-      >
-        <Stack direction="row" spacing={1.5} alignItems="center">
-          {icon && (
-            <Box
-              sx={{
-                width: 40,
-                height: 40,
-                borderRadius: 2,
-                background:
-                  headerColor ||
-                  `linear-gradient(135deg, ${colors.primary.main} 0%, ${colors.primary.dark} 100%)`,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                boxShadow: `0 4px 14px ${alpha(colors.primary.main, 0.25)}`,
-              }}
-            >
-              {icon}
-            </Box>
-          )}
-          <Typography variant="h6" fontWeight={600}>
-            {title}
-          </Typography>
-        </Stack>
-      </Stack>
-      {children}
-    </CardContent>
-  </Card>
-);
+const formatFileSize = (bytes: number) => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+};
 
 export const DeveloperScrapingPage = () => {
   const [directions, setDirections] = useState<Direction[]>([]);
@@ -96,8 +44,11 @@ export const DeveloperScrapingPage = () => {
   const [importFormat, setImportFormat] = useState<"csv" | "json">("csv");
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const progressTimer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     const init = async () => {
@@ -114,6 +65,13 @@ export const DeveloperScrapingPage = () => {
     void init();
   }, [importDirectionId]);
 
+  const handleFileDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files[0];
+    if (file) setImportFile(file);
+  };
+
   const handleImport = async () => {
     if (!importFile || !importDirectionId) {
       setError("Выберите файл и направление");
@@ -123,58 +81,133 @@ export const DeveloperScrapingPage = () => {
     setError(null);
     setSuccess(null);
     setImporting(true);
-    try {
-      const token = getToken();
-      const apiBase = import.meta.env.VITE_API_BASE || "/api";
-      const endpoint = `${apiBase}/scrape/import/${importPlatform}-${importFormat}?direction_id=${importDirectionId}`;
+    setImportProgress(0);
 
-      const headers: Record<string, string> = {
-        Authorization: `Bearer ${token}`,
-      };
+    // Estimate total time based on file size (~6 sec per MB)
+    const estimatedSeconds = Math.max(10, (importFile.size / 1024 / 1024) * 6);
+    const intervalMs = 500;
+    const step = 95 / (estimatedSeconds * 1000 / intervalMs);
+    progressTimer.current = setInterval(() => {
+      setImportProgress((prev) => Math.min(prev + step, 95));
+    }, intervalMs);
 
-      // Both CSV and JSON should be sent as multipart/form-data
-      const formData = new FormData();
-      formData.append("file", importFile);
-      const body = formData;
-      // fetch with FormData automatically sets multipart/form-data with boundary
+    const token = getToken();
+    const apiBase = import.meta.env.VITE_API_BASE || "/api";
+    const endpoint = `${apiBase}/scrape/import/${importPlatform}-${importFormat}?direction_id=${importDirectionId}`;
 
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers,
-        credentials: "include",
-        body,
-      });
+    const formData = new FormData();
+    formData.append("file", importFile);
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: "Ошибка импорта" }));
-        throw new Error(errorData.detail || "Ошибка импорта");
+    const done = () => {
+      if (progressTimer.current) {
+        clearInterval(progressTimer.current);
+        progressTimer.current = null;
       }
+      setImportProgress(100);
+      setTimeout(() => {
+        setImporting(false);
+        setImportProgress(0);
+      }, 400);
+    };
 
-      const result = await response.json();
-      const errorCount = result.errors?.length || 0;
-      const successMsg = `Импортировано: ${result.imported}, обновлено: ${result.updated}${errorCount > 0 ? `. Ошибок: ${errorCount}` : ""
-        }`;
-      setSuccess(successMsg);
-      setImportFile(null);
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setImporting(false);
-    }
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", endpoint);
+    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    xhr.withCredentials = true;
+
+    xhr.onload = () => {
+      try {
+        const result = JSON.parse(xhr.responseText);
+        if (xhr.status >= 400) {
+          setError(result.detail || "Ошибка импорта");
+        } else {
+          const errorCount = result.errors?.length || 0;
+          setSuccess(
+            `Импортировано: ${result.imported}, обновлено: ${result.updated}${errorCount > 0 ? `. Ошибок: ${errorCount}` : ""}`
+          );
+          setImportFile(null);
+        }
+      } catch {
+        setError("Ошибка обработки ответа");
+      }
+      done();
+    };
+
+    xhr.onerror = () => {
+      setError("Ошибка сети при загрузке файла");
+      done();
+    };
+
+    xhr.send(formData);
+  };
+
+  const platformConfig = {
+    vk: { label: "VK", color: "#5181b8" },
+    instagram: { label: "IG", color: "#e6683c" },
+    tiktok: { label: "TT", color: "#fe2c55" },
   };
 
   return (
     <Stack spacing={3}>
-      {/* Заголовок */}
-      <Box>
-        <Typography variant="h5" fontWeight={700} gutterBottom>
-          Импорт скрапленных данных
-        </Typography>
-        <Typography variant="body2" color="text.secondary">
-          Загрузка CSV/JSON файлов из ВКонтакте, Instagram и TikTok в разрезе направлений
-        </Typography>
-      </Box>
+      {/* Header banner */}
+      <Card
+        sx={{
+          background: `linear-gradient(135deg, ${colors.primary.dark} 0%, ${colors.primary.main} 50%, ${colors.secondary.main} 100%)`,
+          color: "#fff",
+          position: "relative",
+          overflow: "hidden",
+        }}
+      >
+        <Box
+          sx={{
+            position: "absolute",
+            top: -40,
+            right: -40,
+            width: 160,
+            height: 160,
+            borderRadius: "50%",
+            background: alpha("#fff", 0.05),
+          }}
+        />
+        <Box
+          sx={{
+            position: "absolute",
+            bottom: -20,
+            right: 80,
+            width: 100,
+            height: 100,
+            borderRadius: "50%",
+            background: alpha("#fff", 0.03),
+          }}
+        />
+        <CardContent sx={{ p: { xs: 3, md: 4 }, position: "relative", zIndex: 1 }}>
+          <Stack direction="row" spacing={2} alignItems="center">
+            <Box
+              sx={{
+                width: 56,
+                height: 56,
+                borderRadius: 3,
+                bgcolor: alpha("#fff", 0.15),
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <Storage sx={{ fontSize: 28 }} />
+            </Box>
+            <Box>
+              <Typography variant="h5" fontWeight={700}>
+                Импорт данных
+              </Typography>
+              <Typography variant="body2" sx={{ opacity: 0.8 }}>
+                Загрузка CSV/JSON файлов из ВКонтакте, Instagram и TikTok
+              </Typography>
+            </Box>
+          </Stack>
+        </CardContent>
+      </Card>
 
+      {/* Alerts */}
       {error && (
         <Alert severity="error" onClose={() => setError(null)}>
           {error}
@@ -186,14 +219,38 @@ export const DeveloperScrapingPage = () => {
         </Alert>
       )}
 
-      <Grid container justifyContent="center">
-        <Grid item xs={12} md={8} lg={6}>
-          <SectionCard
-            title="Импорт данных"
-            icon={<FileUpload sx={{ color: "#fff", fontSize: 20 }} />}
-            headerColor={`linear-gradient(135deg, ${colors.info.main} 0%, ${colors.info.dark} 100%)`}
-          >
-            <Stack spacing={2}>
+      {/* Main content - two columns */}
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+          gap: 3,
+        }}
+      >
+        {/* Left: Settings */}
+        <Card>
+          <CardContent sx={{ p: 3 }}>
+            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 3 }}>
+              <Box
+                sx={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 2,
+                  background: `linear-gradient(135deg, ${colors.primary.main} 0%, ${colors.primary.dark} 100%)`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  boxShadow: `0 4px 14px ${alpha(colors.primary.main, 0.25)}`,
+                }}
+              >
+                <Description sx={{ color: "#fff", fontSize: 18 }} />
+              </Box>
+              <Typography variant="h6" fontWeight={600}>
+                Параметры импорта
+              </Typography>
+            </Stack>
+
+            <Stack spacing={2.5}>
               <FormControl fullWidth>
                 <InputLabel>Направление</InputLabel>
                 <Select
@@ -209,108 +266,249 @@ export const DeveloperScrapingPage = () => {
                 </Select>
               </FormControl>
 
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <FormControl fullWidth>
-                    <InputLabel>Соцсеть</InputLabel>
-                    <Select
-                      label="Соцсеть"
-                      value={importPlatform}
-                      onChange={(event) =>
-                        setImportPlatform(
-                          event.target.value as "vk" | "instagram" | "tiktok"
-                        )
-                      }
-                    >
-                      <MenuItem value="vk">ВКонтакте</MenuItem>
-                      <MenuItem value="instagram">Instagram</MenuItem>
-                      <MenuItem value="tiktok">TikTok</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <FormControl fullWidth>
-                    <InputLabel>Формат</InputLabel>
-                    <Select
-                      label="Формат"
-                      value={importFormat}
-                      onChange={(event) =>
-                        setImportFormat(event.target.value as "csv" | "json")
-                      }
-                    >
-                      <MenuItem value="csv">CSV</MenuItem>
-                      <MenuItem value="json">JSON</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Grid>
-              </Grid>
-
-              <Box
-                sx={{
-                  border: `2px dashed ${colors.grey[300]}`,
-                  borderRadius: 2,
-                  p: 3,
-                  textAlign: "center",
-                  bgcolor: importFile ? alpha(colors.info.main, 0.05) : colors.grey[50],
-                  transition: "all 0.2s",
-                  "&:hover": {
-                    borderColor: colors.info.main,
-                    bgcolor: alpha(colors.info.main, 0.05),
-                  },
-                }}
-              >
-                <input
-                  accept={importFormat === "csv" ? ".csv" : ".json"}
-                  style={{ display: "none" }}
-                  id="import-upload"
-                  type="file"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) {
-                      setImportFile(file);
-                    }
-                  }}
-                />
-                <label htmlFor="import-upload">
-                  <Stack spacing={1} alignItems="center" sx={{ cursor: "pointer" }}>
-                    <Upload sx={{ fontSize: 40, color: colors.info.main }} />
-                    <Typography variant="body2" fontWeight={500}>
-                      {importFile ? importFile.name : "Выберите файл для импорта"}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      Форматы: CSV или JSON. Поддерживаются VK, Instagram и TikTok.
-                    </Typography>
-                  </Stack>
-                </label>
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+                  Платформа
+                </Typography>
+                <Stack direction="row" spacing={1}>
+                  {(["vk", "instagram", "tiktok"] as const).map((p) => (
+                    <Chip
+                      key={p}
+                      label={p === "vk" ? "ВКонтакте" : p === "instagram" ? "Instagram" : "TikTok"}
+                      onClick={() => setImportPlatform(p)}
+                      sx={{
+                        fontWeight: 600,
+                        px: 1,
+                        bgcolor:
+                          importPlatform === p
+                            ? alpha(platformConfig[p].color, 0.15)
+                            : colors.grey[100],
+                        color:
+                          importPlatform === p
+                            ? platformConfig[p].color
+                            : colors.grey[600],
+                        border: `1.5px solid ${importPlatform === p ? platformConfig[p].color : "transparent"}`,
+                        "&:hover": {
+                          bgcolor: alpha(platformConfig[p].color, 0.1),
+                        },
+                      }}
+                    />
+                  ))}
+                </Stack>
               </Box>
 
-              <Button
-                variant="contained"
-                fullWidth
-                size="large"
-                startIcon={<Upload />}
-                onClick={handleImport}
-                disabled={!importFile || !importDirectionId || importing}
-                sx={{
-                  py: 1.5,
-                  background: `linear-gradient(135deg, ${colors.info.main} 0%, ${colors.info.dark} 100%)`,
-                }}
-              >
-                {importing ? "Импорт..." : "Импортировать"}
-              </Button>
+              <Box>
+                <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+                  Формат файла
+                </Typography>
+                <Stack direction="row" spacing={1}>
+                  {(["csv", "json"] as const).map((f) => (
+                    <Chip
+                      key={f}
+                      label={f.toUpperCase()}
+                      onClick={() => setImportFormat(f)}
+                      sx={{
+                        fontWeight: 600,
+                        px: 1.5,
+                        bgcolor:
+                          importFormat === f
+                            ? alpha(colors.info.main, 0.15)
+                            : colors.grey[100],
+                        color:
+                          importFormat === f ? colors.info.dark : colors.grey[600],
+                        border: `1.5px solid ${importFormat === f ? colors.info.main : "transparent"}`,
+                        "&:hover": {
+                          bgcolor: alpha(colors.info.main, 0.1),
+                        },
+                      }}
+                    />
+                  ))}
+                </Stack>
+              </Box>
 
               <TextField
-                label="Комментарий / описание выгрузки (необязательно)"
+                label="Комментарий (необязательно)"
                 fullWidth
                 multiline
                 minRows={2}
-                placeholder="Например: VK Madhal, выгрузка за март 2026, группа club123456..."
+                placeholder="Например: выгрузка за февраль 2026..."
               />
             </Stack>
-          </SectionCard>
-        </Grid>
-      </Grid>
+          </CardContent>
+        </Card>
+
+        {/* Right: File upload */}
+        <Card>
+          <CardContent sx={{ p: 3, height: "100%", display: "flex", flexDirection: "column" }}>
+            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 3 }}>
+              <Box
+                sx={{
+                  width: 36,
+                  height: 36,
+                  borderRadius: 2,
+                  background: `linear-gradient(135deg, ${colors.info.main} 0%, ${colors.info.dark} 100%)`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  boxShadow: `0 4px 14px ${alpha(colors.info.main, 0.25)}`,
+                }}
+              >
+                <CloudUpload sx={{ color: "#fff", fontSize: 18 }} />
+              </Box>
+              <Typography variant="h6" fontWeight={600}>
+                Файл
+              </Typography>
+            </Stack>
+
+            <Box
+              onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+              onDragLeave={() => setDragOver(false)}
+              onDrop={handleFileDrop}
+              sx={{
+                flex: 1,
+                border: `2px dashed ${dragOver ? colors.info.main : importFile ? colors.success.main : colors.grey[300]}`,
+                borderRadius: 3,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                textAlign: "center",
+                bgcolor: dragOver
+                  ? alpha(colors.info.main, 0.08)
+                  : importFile
+                    ? alpha(colors.success.main, 0.04)
+                    : colors.grey[50],
+                transition: "all 0.2s",
+                cursor: "pointer",
+                minHeight: 200,
+                "&:hover": {
+                  borderColor: colors.info.main,
+                  bgcolor: alpha(colors.info.main, 0.05),
+                },
+              }}
+            >
+              <input
+                accept={importFormat === "csv" ? ".csv,.tsv,.txt" : ".json"}
+                style={{ display: "none" }}
+                id="import-upload"
+                type="file"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) setImportFile(file);
+                }}
+              />
+              <label htmlFor="import-upload" style={{ cursor: "pointer", width: "100%", padding: 24 }}>
+                {importFile ? (
+                  <Stack spacing={1.5} alignItems="center">
+                    <Box
+                      sx={{
+                        width: 56,
+                        height: 56,
+                        borderRadius: 3,
+                        bgcolor: alpha(colors.success.main, 0.1),
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <InsertDriveFile sx={{ fontSize: 28, color: colors.success.main }} />
+                    </Box>
+                    <Box>
+                      <Typography variant="body1" fontWeight={600}>
+                        {importFile.name}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {formatFileSize(importFile.size)}
+                      </Typography>
+                    </Box>
+                    <Typography variant="caption" color="text.secondary">
+                      Нажмите чтобы выбрать другой файл
+                    </Typography>
+                  </Stack>
+                ) : (
+                  <Stack spacing={1.5} alignItems="center">
+                    <Box
+                      sx={{
+                        width: 64,
+                        height: 64,
+                        borderRadius: "50%",
+                        bgcolor: alpha(colors.info.main, 0.1),
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Upload sx={{ fontSize: 32, color: colors.info.main }} />
+                    </Box>
+                    <Box>
+                      <Typography variant="body1" fontWeight={600}>
+                        Перетащите файл сюда
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        или нажмите для выбора
+                      </Typography>
+                    </Box>
+                    <Typography variant="caption" color="text.secondary">
+                      CSV, TSV, JSON
+                    </Typography>
+                  </Stack>
+                )}
+              </label>
+            </Box>
+          </CardContent>
+        </Card>
+      </Box>
+
+      {/* Progress bar */}
+      {importing && (
+        <Card sx={{ overflow: "visible" }}>
+          <CardContent sx={{ p: 3 }}>
+            <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1 }}>
+              <Typography variant="subtitle2" fontWeight={600}>
+                Импорт данных
+              </Typography>
+              <Typography variant="subtitle2" fontWeight={700} color="info.main">
+                {Math.round(importProgress)}%
+              </Typography>
+            </Stack>
+            <LinearProgress
+              variant="determinate"
+              value={importProgress}
+              sx={{
+                height: 10,
+                borderRadius: 5,
+                bgcolor: alpha(colors.info.main, 0.12),
+                "& .MuiLinearProgress-bar": {
+                  borderRadius: 5,
+                  background: `linear-gradient(90deg, ${colors.info.main} 0%, ${colors.secondary.main} 100%)`,
+                },
+              }}
+            />
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: "block" }}>
+              Обработка записей на сервере...
+            </Typography>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Import button */}
+      <Button
+        variant="contained"
+        size="large"
+        startIcon={<Upload />}
+        onClick={handleImport}
+        disabled={!importFile || !importDirectionId || importing}
+        sx={{
+          py: 2,
+          fontSize: "1rem",
+          background: `linear-gradient(135deg, ${colors.info.main} 0%, ${colors.info.dark} 100%)`,
+          boxShadow: `0 8px 24px ${alpha(colors.info.main, 0.3)}`,
+          "&:hover": {
+            boxShadow: `0 12px 32px ${alpha(colors.info.main, 0.4)}`,
+          },
+        }}
+      >
+        {importing ? "Импорт..." : "Импортировать данные"}
+      </Button>
     </Stack>
   );
 };
-

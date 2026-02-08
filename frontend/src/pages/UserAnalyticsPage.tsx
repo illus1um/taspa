@@ -62,21 +62,34 @@ type VkGenderItem = { gender: string; count: number };
 type VkUniItem = { university: string; count: number };
 type VkSchoolItem = { school: string; count: number };
 type VkTimelineItem = { day: string; count: number };
-type VkGroupItem = { name?: string | null; members_count?: number | null };
+type VkGroupItem = { name?: string | null; url?: string | null; members_count?: number | null };
 type VkMemberItem = {
   vk_user_id: string;
   full_name?: string | null;
   gender?: string | null;
+  age?: number | null;
+  city?: string | null;
   university?: string | null;
   school?: string | null;
 };
-type InstagramItem = { username: string; url?: string | null; location?: string | null };
+type InstagramAccountItem = { username: string; url?: string | null; name?: string | null; location?: string | null };
+type InstagramUserItem = { username: string; url?: string | null; location?: string | null; sex?: string | null; city?: string | null };
 type DistributionItem = { label: string; count: number };
-type TikTokItem = {
+type SocialSummary = { direction_id: number; accounts_count: number; users_count: number };
+type TikTokAccountItem = {
+  username: string;
+  url?: string | null;
+  name?: string | null;
+  location?: string | null;
+  followers_count?: number | null;
+};
+type TikTokUserItem = {
   username: string;
   url?: string | null;
   location?: string | null;
   followers_count?: number | null;
+  sex?: string | null;
+  city?: string | null;
 };
 
 const GENDER_COLORS = [colors.primary.main, colors.secondary.main, colors.grey[400]];
@@ -232,10 +245,12 @@ export const UserAnalyticsPage = () => {
   const [schools, setSchools] = useState<VkSchoolItem[]>([]);
   const [timeline, setTimeline] = useState<VkTimelineItem[]>([]);
   const [groups, setGroups] = useState<VkGroupItem[]>([]);
-  const [instagramAccounts, setInstagramAccounts] = useState<InstagramItem[]>([]);
-  const [instagramUsers, setInstagramUsers] = useState<InstagramItem[]>([]);
-  const [tiktokAccounts, setTiktokAccounts] = useState<TikTokItem[]>([]);
-  const [tiktokUsers, setTiktokUsers] = useState<TikTokItem[]>([]);
+  const [instagramAccounts, setInstagramAccounts] = useState<InstagramAccountItem[]>([]);
+  const [instagramUsers, setInstagramUsers] = useState<InstagramUserItem[]>([]);
+  const [instagramSummary, setInstagramSummary] = useState<SocialSummary | null>(null);
+  const [tiktokAccounts, setTiktokAccounts] = useState<TikTokAccountItem[]>([]);
+  const [tiktokUsers, setTiktokUsers] = useState<TikTokUserItem[]>([]);
+  const [tiktokSummary, setTiktokSummary] = useState<SocialSummary | null>(null);
   const [vkAgeDistribution, setVkAgeDistribution] = useState<DistributionItem[]>([]);
   const [vkCityDistribution, setVkCityDistribution] = useState<DistributionItem[]>([]);
   const [socialGender, setSocialGender] = useState<DistributionItem[]>([]);
@@ -310,27 +325,31 @@ export const UserAnalyticsPage = () => {
           setVkAgeDistribution(vkAgeData as DistributionItem[]);
           setVkCityDistribution(vkCityData as DistributionItem[]);
         } else if (activePlatform === "instagram") {
-          const [accountsData, usersData, genderData, citiesData] = await Promise.all([
+          const [summaryData, accountsData, usersData, genderData, citiesData] = await Promise.all([
+            apiFetch(`/analytics/instagram/summary/${directionId}`),
             apiFetch(`/analytics/instagram/accounts/${directionId}`),
             apiFetch(`/analytics/instagram/users/${directionId}`),
             apiFetch(`/analytics/instagram/gender/${directionId}`),
             apiFetch(`/analytics/instagram/cities/${directionId}`),
           ]);
 
-          setInstagramAccounts((accountsData as { items: InstagramItem[] }).items ?? []);
-          setInstagramUsers((usersData as { items: InstagramItem[] }).items ?? []);
+          setInstagramSummary(summaryData as SocialSummary);
+          setInstagramAccounts((accountsData as { items: InstagramAccountItem[] }).items ?? []);
+          setInstagramUsers((usersData as { items: InstagramUserItem[] }).items ?? []);
           setSocialGender(genderData as DistributionItem[]);
           setSocialCities(citiesData as DistributionItem[]);
         } else if (activePlatform === "tiktok") {
-          const [accountsData, usersData, genderData, citiesData] = await Promise.all([
+          const [summaryData, accountsData, usersData, genderData, citiesData] = await Promise.all([
+            apiFetch(`/analytics/tiktok/summary/${directionId}`),
             apiFetch(`/analytics/tiktok/accounts/${directionId}`),
             apiFetch(`/analytics/tiktok/users/${directionId}`),
             apiFetch(`/analytics/tiktok/gender/${directionId}`),
             apiFetch(`/analytics/tiktok/cities/${directionId}`),
           ]);
 
-          setTiktokAccounts((accountsData as { items: TikTokItem[] }).items ?? []);
-          setTiktokUsers((usersData as { items: TikTokItem[] }).items ?? []);
+          setTiktokSummary(summaryData as SocialSummary);
+          setTiktokAccounts((accountsData as { items: TikTokAccountItem[] }).items ?? []);
+          setTiktokUsers((usersData as { items: TikTokUserItem[] }).items ?? []);
           setSocialGender(genderData as DistributionItem[]);
           setSocialCities(citiesData as DistributionItem[]);
         }
@@ -662,7 +681,11 @@ export const UserAnalyticsPage = () => {
             <Grid size={{ xs: 12, lg: 6 }}>
               <SectionCard title="Распределение по возрасту" icon={<TrendingUp size={24} />}>
                 <Box sx={{ height: 280 }}>
-                  {!vkAgeDistribution.length ? (
+                  {loadingData ? (
+                    <Box sx={{ display: "flex", justifyContent: "center", pt: 10 }}>
+                      <CircularProgress />
+                    </Box>
+                  ) : !vkAgeDistribution.length ? (
                     <EmptyState message="Нет данных о возрасте" />
                   ) : (
                     <ResponsiveContainer width="100%" height="100%">
@@ -767,6 +790,8 @@ export const UserAnalyticsPage = () => {
                     <TableCell>ID</TableCell>
                     <TableCell>ФИО</TableCell>
                     <TableCell>Пол</TableCell>
+                    <TableCell>Возраст</TableCell>
+                    <TableCell>Город</TableCell>
                     <TableCell>ВУЗ</TableCell>
                     <TableCell>Школа</TableCell>
                   </TableRow>
@@ -791,13 +816,15 @@ export const UserAnalyticsPage = () => {
                           "—"
                         )}
                       </TableCell>
+                      <TableCell>{item.age ?? "—"}</TableCell>
+                      <TableCell>{item.city || "—"}</TableCell>
                       <TableCell>{item.university || "—"}</TableCell>
                       <TableCell>{item.school || "—"}</TableCell>
                     </TableRow>
                   ))}
                   {!searchResults.length && (
                     <TableRow>
-                      <TableCell colSpan={5}>
+                      <TableCell colSpan={7}>
                         <EmptyState message="Введите запрос для поиска" />
                       </TableCell>
                     </TableRow>
@@ -815,6 +842,7 @@ export const UserAnalyticsPage = () => {
                   <TableRow>
                     <TableCell>Название</TableCell>
                     <TableCell align="right">Подписчиков</TableCell>
+                    <TableCell align="right">Ссылка</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -828,11 +856,20 @@ export const UserAnalyticsPage = () => {
                           color="primary"
                         />
                       </TableCell>
+                      <TableCell align="right">
+                        {item.url && (
+                          <Tooltip title="Открыть группу">
+                            <IconButton size="small" href={item.url} target="_blank">
+                              <ExternalLink size={16} />
+                            </IconButton>
+                          </Tooltip>
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))}
                   {!groups.length && (
                     <TableRow>
-                      <TableCell colSpan={2}>
+                      <TableCell colSpan={3}>
                         <EmptyState message="Нет групп" />
                       </TableCell>
                     </TableRow>
@@ -881,7 +918,7 @@ export const UserAnalyticsPage = () => {
             <Grid size={{ xs: 12, sm: 6 }}>
               <StatCard
                 title="Аккаунтов"
-                value={instagramAccounts.length}
+                value={instagramSummary?.accounts_count?.toLocaleString() ?? "—"}
                 icon={<Instagram size={24} color="#fff" />}
                 gradient="linear-gradient(135deg, #f09433 0%, #dc2743 100%)"
                 loading={loadingData}
@@ -890,7 +927,7 @@ export const UserAnalyticsPage = () => {
             <Grid size={{ xs: 12, sm: 6 }}>
               <StatCard
                 title="Пользователей"
-                value={instagramUsers.length}
+                value={instagramSummary?.users_count?.toLocaleString() ?? "—"}
                 icon={<Users size={24} color="#fff" />}
                 gradient="linear-gradient(135deg, #bc1888 0%, #cc2366 100%)"
                 loading={loadingData}
@@ -902,7 +939,11 @@ export const UserAnalyticsPage = () => {
             <Grid size={{ xs: 12, lg: 6 }}>
               <SectionCard title="Распределение по полу" icon={<User size={24} />}>
                 <Box sx={{ height: 280 }}>
-                  {!socialGender.length ? (
+                  {loadingData ? (
+                    <Box sx={{ display: "flex", justifyContent: "center", pt: 10 }}>
+                      <CircularProgress />
+                    </Box>
+                  ) : !socialGender.length ? (
                     <EmptyState message="Нет данных о поле" />
                   ) : (
                     <ResponsiveContainer width="100%" height="100%">
@@ -972,8 +1013,9 @@ export const UserAnalyticsPage = () => {
                     <TableHead>
                       <TableRow>
                         <TableCell>Username</TableCell>
+                        <TableCell>Название</TableCell>
                         <TableCell>Локация</TableCell>
-                        <TableCell align="right">Действия</TableCell>
+                        <TableCell align="right">Ссылка</TableCell>
                       </TableRow>
                     </TableHead>
                     <TableBody>
@@ -982,6 +1024,7 @@ export const UserAnalyticsPage = () => {
                           <TableCell>
                             <Typography fontWeight={500}>@{item.username}</Typography>
                           </TableCell>
+                          <TableCell>{item.name || "—"}</TableCell>
                           <TableCell>{item.location || "—"}</TableCell>
                           <TableCell align="right">
                             {item.url && (
@@ -1000,7 +1043,7 @@ export const UserAnalyticsPage = () => {
                       ))}
                       {!instagramAccounts.length && (
                         <TableRow>
-                          <TableCell colSpan={3}>
+                          <TableCell colSpan={4}>
                             <EmptyState message="Нет аккаунтов" />
                           </TableCell>
                         </TableRow>
@@ -1017,6 +1060,8 @@ export const UserAnalyticsPage = () => {
                     <TableHead>
                       <TableRow>
                         <TableCell>Username</TableCell>
+                        <TableCell>Пол</TableCell>
+                        <TableCell>Город</TableCell>
                         <TableCell>Локация</TableCell>
                       </TableRow>
                     </TableHead>
@@ -1026,12 +1071,22 @@ export const UserAnalyticsPage = () => {
                           <TableCell>
                             <Typography fontWeight={500}>@{item.username}</Typography>
                           </TableCell>
+                          <TableCell>
+                            {item.sex === "male" ? (
+                              <Chip size="small" label="М" color="info" />
+                            ) : item.sex === "female" ? (
+                              <Chip size="small" label="Ж" color="secondary" />
+                            ) : (
+                              "—"
+                            )}
+                          </TableCell>
+                          <TableCell>{item.city || "—"}</TableCell>
                           <TableCell>{item.location || "—"}</TableCell>
                         </TableRow>
                       ))}
                       {!instagramUsers.length && (
                         <TableRow>
-                          <TableCell colSpan={2}>
+                          <TableCell colSpan={4}>
                             <EmptyState message="Нет пользователей" />
                           </TableCell>
                         </TableRow>
@@ -1081,7 +1136,7 @@ export const UserAnalyticsPage = () => {
             <Grid size={{ xs: 12, sm: 6 }}>
               <StatCard
                 title="Аккаунтов"
-                value={tiktokAccounts.length}
+                value={tiktokSummary?.accounts_count?.toLocaleString() ?? "—"}
                 icon={
                   <Box
                     sx={{
@@ -1105,7 +1160,7 @@ export const UserAnalyticsPage = () => {
             <Grid size={{ xs: 12, sm: 6 }}>
               <StatCard
                 title="Пользователей"
-                value={tiktokUsers.length}
+                value={tiktokSummary?.users_count?.toLocaleString() ?? "—"}
                 icon={<Users size={24} color="#fff" />}
                 gradient="linear-gradient(135deg, #25F4EE 0%, #FE2C55 100%)"
                 loading={loadingData}
@@ -1117,7 +1172,11 @@ export const UserAnalyticsPage = () => {
             <Grid size={{ xs: 12, lg: 6 }}>
               <SectionCard title="Распределение по полу" icon={<User size={24} />}>
                 <Box sx={{ height: 280 }}>
-                  {!socialGender.length ? (
+                  {loadingData ? (
+                    <Box sx={{ display: "flex", justifyContent: "center", pt: 10 }}>
+                      <CircularProgress />
+                    </Box>
+                  ) : !socialGender.length ? (
                     <EmptyState message="Нет данных о поле" />
                   ) : (
                     <ResponsiveContainer width="100%" height="100%">
@@ -1207,6 +1266,7 @@ export const UserAnalyticsPage = () => {
                     <TableHead>
                       <TableRow>
                         <TableCell>Username</TableCell>
+                        <TableCell>Название</TableCell>
                         <TableCell>Локация</TableCell>
                         <TableCell align="right">Подписчики</TableCell>
                       </TableRow>
@@ -1217,6 +1277,7 @@ export const UserAnalyticsPage = () => {
                           <TableCell>
                             <Typography fontWeight={500}>@{item.username}</Typography>
                           </TableCell>
+                          <TableCell>{item.name || "—"}</TableCell>
                           <TableCell>{item.location || "—"}</TableCell>
                           <TableCell align="right">
                             <Chip
@@ -1228,7 +1289,7 @@ export const UserAnalyticsPage = () => {
                       ))}
                       {!tiktokAccounts.length && (
                         <TableRow>
-                          <TableCell colSpan={3}>
+                          <TableCell colSpan={4}>
                             <EmptyState message="Нет аккаунтов" />
                           </TableCell>
                         </TableRow>
@@ -1245,6 +1306,8 @@ export const UserAnalyticsPage = () => {
                     <TableHead>
                       <TableRow>
                         <TableCell>Username</TableCell>
+                        <TableCell>Пол</TableCell>
+                        <TableCell>Город</TableCell>
                         <TableCell>Локация</TableCell>
                         <TableCell align="right">Подписчики</TableCell>
                       </TableRow>
@@ -1255,6 +1318,16 @@ export const UserAnalyticsPage = () => {
                           <TableCell>
                             <Typography fontWeight={500}>@{item.username}</Typography>
                           </TableCell>
+                          <TableCell>
+                            {item.sex === "male" ? (
+                              <Chip size="small" label="М" color="info" />
+                            ) : item.sex === "female" ? (
+                              <Chip size="small" label="Ж" color="secondary" />
+                            ) : (
+                              "—"
+                            )}
+                          </TableCell>
+                          <TableCell>{item.city || "—"}</TableCell>
                           <TableCell>{item.location || "—"}</TableCell>
                           <TableCell align="right">
                             <Chip
@@ -1266,7 +1339,7 @@ export const UserAnalyticsPage = () => {
                       ))}
                       {!tiktokUsers.length && (
                         <TableRow>
-                          <TableCell colSpan={3}>
+                          <TableCell colSpan={5}>
                             <EmptyState message="Нет пользователей" />
                           </TableCell>
                         </TableRow>

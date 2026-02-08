@@ -60,31 +60,65 @@ class VkMemberSearchResponse(BaseModel):
 class InstagramAccountItem(BaseModel):
     username: str
     url: Optional[str]
+    name: Optional[str]
     location: Optional[str]
 
 
-class InstagramUsersResponse(BaseModel):
+class InstagramUserItem(BaseModel):
+    username: str
+    url: Optional[str]
+    location: Optional[str]
+    sex: Optional[str]
+    city: Optional[str]
+
+
+class InstagramAccountsResponse(BaseModel):
     items: List[InstagramAccountItem]
+
+
+class InstagramUsersResponse(BaseModel):
+    items: List[InstagramUserItem]
 
 
 class TikTokAccountItem(BaseModel):
     username: str
     url: Optional[str]
+    name: Optional[str]
     location: Optional[str]
     followers_count: Optional[int]
 
 
-class TikTokUsersResponse(BaseModel):
+class TikTokUserItem(BaseModel):
+    username: str
+    url: Optional[str]
+    location: Optional[str]
+    followers_count: Optional[int]
+    sex: Optional[str]
+    city: Optional[str]
+
+
+class TikTokAccountsResponse(BaseModel):
     items: List[TikTokAccountItem]
+
+
+class TikTokUsersResponse(BaseModel):
+    items: List[TikTokUserItem]
 
 
 class DirectionGroupsItem(BaseModel):
     name: Optional[str]
+    url: Optional[str]
     members_count: Optional[int]
 
 
 class DirectionGroupsResponse(BaseModel):
     items: List[DirectionGroupsItem]
+
+
+class SocialSummaryResponse(BaseModel):
+    direction_id: int
+    accounts_count: int
+    users_count: int
 
 
 app = FastAPI(title="TASPA Analytics Service")
@@ -324,7 +358,7 @@ def vk_groups(
         rows = conn.execute(
             text(
                 """
-                SELECT name, members_count
+                SELECT name, url, members_count
                 FROM vk_groups
                 WHERE direction_id = :direction_id
                 ORDER BY members_count DESC NULLS LAST
@@ -332,8 +366,32 @@ def vk_groups(
             ),
             {"direction_id": direction_id},
         ).fetchall()
-    items = [DirectionGroupsItem(name=row[0], members_count=row[1]) for row in rows]
+    items = [DirectionGroupsItem(name=row[0], url=row[1], members_count=row[2]) for row in rows]
     return DirectionGroupsResponse(items=items)
+
+
+@router.get("/instagram/summary/{direction_id}", response_model=SocialSummaryResponse)
+def instagram_summary(
+    direction_id: int, _: List[str] = Depends(require_any_role)
+) -> SocialSummaryResponse:
+    with engine.connect() as conn:
+        acc_row = conn.execute(
+            text("SELECT COUNT(*) FROM instagram_accounts WHERE direction_id = :did"),
+            {"did": direction_id},
+        ).fetchone()
+        usr_row = conn.execute(
+            text("""
+                SELECT COUNT(*) FROM instagram_users u
+                JOIN instagram_accounts a ON a.id = u.instagram_account_id
+                WHERE a.direction_id = :did
+            """),
+            {"did": direction_id},
+        ).fetchone()
+    return SocialSummaryResponse(
+        direction_id=direction_id,
+        accounts_count=int(acc_row[0] or 0),
+        users_count=int(usr_row[0] or 0),
+    )
 
 
 @router.get("/instagram/users/{direction_id}", response_model=InstagramUsersResponse)
@@ -344,7 +402,7 @@ def instagram_users(
         rows = conn.execute(
             text(
                 """
-                SELECT u.username, u.url, u.location
+                SELECT u.username, u.url, u.location, u.sex, u.city
                 FROM instagram_users u
                 JOIN instagram_accounts a ON a.id = u.instagram_account_id
                 WHERE a.direction_id = :direction_id
@@ -354,19 +412,22 @@ def instagram_users(
             ),
             {"direction_id": direction_id},
         ).fetchall()
-    items = [InstagramAccountItem(username=row[0], url=row[1], location=row[2]) for row in rows]
+    items = [
+        InstagramUserItem(username=row[0], url=row[1], location=row[2], sex=row[3], city=row[4])
+        for row in rows
+    ]
     return InstagramUsersResponse(items=items)
 
 
-@router.get("/instagram/accounts/{direction_id}", response_model=InstagramUsersResponse)
+@router.get("/instagram/accounts/{direction_id}", response_model=InstagramAccountsResponse)
 def instagram_accounts(
     direction_id: int, _: List[str] = Depends(require_any_role)
-) -> InstagramUsersResponse:
+) -> InstagramAccountsResponse:
     with engine.connect() as conn:
         rows = conn.execute(
             text(
                 """
-                SELECT username, url, location
+                SELECT username, url, name, location
                 FROM instagram_accounts
                 WHERE direction_id = :direction_id
                 ORDER BY username
@@ -375,8 +436,35 @@ def instagram_accounts(
             ),
             {"direction_id": direction_id},
         ).fetchall()
-    items = [InstagramAccountItem(username=row[0], url=row[1], location=row[2]) for row in rows]
-    return InstagramUsersResponse(items=items)
+    items = [
+        InstagramAccountItem(username=row[0], url=row[1], name=row[2], location=row[3])
+        for row in rows
+    ]
+    return InstagramAccountsResponse(items=items)
+
+
+@router.get("/tiktok/summary/{direction_id}", response_model=SocialSummaryResponse)
+def tiktok_summary(
+    direction_id: int, _: List[str] = Depends(require_any_role)
+) -> SocialSummaryResponse:
+    with engine.connect() as conn:
+        acc_row = conn.execute(
+            text("SELECT COUNT(*) FROM tiktok_accounts WHERE direction_id = :did"),
+            {"did": direction_id},
+        ).fetchone()
+        usr_row = conn.execute(
+            text("""
+                SELECT COUNT(*) FROM tiktok_users u
+                JOIN tiktok_accounts a ON a.id = u.tiktok_account_id
+                WHERE a.direction_id = :did
+            """),
+            {"did": direction_id},
+        ).fetchone()
+    return SocialSummaryResponse(
+        direction_id=direction_id,
+        accounts_count=int(acc_row[0] or 0),
+        users_count=int(usr_row[0] or 0),
+    )
 
 
 @router.get("/tiktok/users/{direction_id}", response_model=TikTokUsersResponse)
@@ -387,7 +475,7 @@ def tiktok_users(
         rows = conn.execute(
             text(
                 """
-                SELECT u.username, u.url, u.location, u.followers_count
+                SELECT u.username, u.url, u.location, u.followers_count, u.sex, u.city
                 FROM tiktok_users u
                 JOIN tiktok_accounts a ON a.id = u.tiktok_account_id
                 WHERE a.direction_id = :direction_id
@@ -398,21 +486,24 @@ def tiktok_users(
             {"direction_id": direction_id},
         ).fetchall()
     items = [
-        TikTokAccountItem(username=row[0], url=row[1], location=row[2], followers_count=row[3])
+        TikTokUserItem(
+            username=row[0], url=row[1], location=row[2],
+            followers_count=row[3], sex=row[4], city=row[5],
+        )
         for row in rows
     ]
     return TikTokUsersResponse(items=items)
 
 
-@router.get("/tiktok/accounts/{direction_id}", response_model=TikTokUsersResponse)
+@router.get("/tiktok/accounts/{direction_id}", response_model=TikTokAccountsResponse)
 def tiktok_accounts(
     direction_id: int, _: List[str] = Depends(require_any_role)
-) -> TikTokUsersResponse:
+) -> TikTokAccountsResponse:
     with engine.connect() as conn:
         rows = conn.execute(
             text(
                 """
-                SELECT username, url, location, followers_count
+                SELECT username, url, name, location, followers_count
                 FROM tiktok_accounts
                 WHERE direction_id = :direction_id
                 ORDER BY followers_count DESC NULLS LAST
@@ -422,10 +513,13 @@ def tiktok_accounts(
             {"direction_id": direction_id},
         ).fetchall()
     items = [
-        TikTokAccountItem(username=row[0], url=row[1], location=row[2], followers_count=row[3])
+        TikTokAccountItem(
+            username=row[0], url=row[1], name=row[2],
+            location=row[3], followers_count=row[4],
+        )
         for row in rows
     ]
-    return TikTokUsersResponse(items=items)
+    return TikTokAccountsResponse(items=items)
 
 
 @router.get("/{platform}/gender/{direction_id}", response_model=List[DistributionItem])
