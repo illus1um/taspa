@@ -9,14 +9,10 @@ import {
   DialogContent,
   DialogTitle,
   Divider,
-  FormControl,
   Grid,
   IconButton,
   Tabs,
   Tab,
-  InputLabel,
-  MenuItem,
-  Select,
   Stack,
   Table,
   TableBody,
@@ -225,6 +221,12 @@ export const AdminDirectionsPage = () => {
   const [editSource, setEditSource] = useState<Source | null>(null);
   const [editSourceIdentifier, setEditSourceIdentifier] = useState("");
 
+  const [deleteConfirm, setDeleteConfirm] = useState<{
+    type: "direction" | "source";
+    id: number;
+    name: string;
+  } | null>(null);
+
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -281,10 +283,6 @@ export const AdminDirectionsPage = () => {
   };
 
   const handleDeleteDirection = async (directionId: number) => {
-    const confirmed = window.confirm("Удалить направление? Все источники будут удалены.");
-    if (!confirmed) {
-      return;
-    }
     setError(null);
     setSuccess(null);
     try {
@@ -381,10 +379,6 @@ export const AdminDirectionsPage = () => {
     if (!selectedDirectionId) {
       return;
     }
-    const confirmed = window.confirm("Удалить источник?");
-    if (!confirmed) {
-      return;
-    }
     setError(null);
     setSuccess(null);
     try {
@@ -396,6 +390,16 @@ export const AdminDirectionsPage = () => {
     } catch (err) {
       setError((err as Error).message);
     }
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm) return;
+    if (deleteConfirm.type === "direction") {
+      await handleDeleteDirection(deleteConfirm.id);
+    } else {
+      await handleDeleteSource(deleteConfirm.id);
+    }
+    setDeleteConfirm(null);
   };
 
   const selectedDirection = directions.find((d) => d.id === selectedDirectionId);
@@ -597,7 +601,7 @@ export const AdminDirectionsPage = () => {
                               size="small"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleDeleteDirection(direction.id);
+                                setDeleteConfirm({ type: "direction", id: direction.id, name: direction.name });
                               }}
                               sx={{
                                 opacity: 0.5,
@@ -800,7 +804,7 @@ export const AdminDirectionsPage = () => {
                                   <IconButton
                                     size="small"
                                     color="error"
-                                    onClick={() => handleDeleteSource(source.id)}
+                                    onClick={() => setDeleteConfirm({ type: "source", id: source.id, name: source.source_identifier })}
                                   >
                                     <Delete fontSize="small" />
                                   </IconButton>
@@ -878,6 +882,26 @@ export const AdminDirectionsPage = () => {
             startIcon={<CloudUpload />}
           >
             Добавить все
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Диалог подтверждения удаления */}
+      <Dialog open={!!deleteConfirm} onClose={() => setDeleteConfirm(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>
+          {deleteConfirm?.type === "direction" ? "Удаление направления" : "Удаление источника"}
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2">
+            {deleteConfirm?.type === "direction"
+              ? <>Удалить направление <strong>{deleteConfirm?.name}</strong>? Все источники будут удалены.</>
+              : <>Удалить источник <strong>{deleteConfirm?.name}</strong>?</>}
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setDeleteConfirm(null)}>Отмена</Button>
+          <Button variant="contained" color="error" onClick={confirmDelete} startIcon={<Delete />}>
+            Удалить
           </Button>
         </DialogActions>
       </Dialog>
